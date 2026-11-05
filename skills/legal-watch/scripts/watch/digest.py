@@ -7,6 +7,8 @@ from __future__ import annotations
 
 import datetime as _dt
 
+from .fetchers import firecrawl_format
+
 MAX_DAYS = {"weekly": 9, "claude-schedule": 9}   # a weekly run that has not succeeded for 9 days is overdue
 
 T = {
@@ -35,9 +37,10 @@ T = {
         "baselines": "First reading recorded (baseline)", "signals": "Official Gazette (MD): issues mentioning watched acts",
         "health": "Last run with every main act checked", "overdue": "overdue: the scheduled run has not completed for {d} days",
         "never": "none yet", "nochanges": "No changes in the acts checked.",
-        "firecrawl_tip": ("Sites refused automatic reading. Connecting Firecrawl (the wizard's first step `reading`, "
-                          "or ask to change it later) lets the scripts read them; it is a paid service with a free "
-                          "monthly allowance, and you sign in yourself.")},
+        "firecrawl_tip": ("Some sites refused automatic reading. Firecrawl may read them, with no guarantee: the "
+                          "monitoring scripts need its CLI, logged in by you and added to the monitoring engines "
+                          "(the wizard's first step `reading`, or ask to change it later). It is a paid service "
+                          "with a free monthly allowance.")},
     "ro": {
         "title": "Monitorizarea legislației", "result": {"OK": "fără modificări", "CHANGES": "modificări găsite",
                                                          "INCOMPLETE": "incomplet: nu toate actele principale au fost verificate",
@@ -64,10 +67,10 @@ T = {
         "signals": "Monitorul Oficial (MD): numere care menționează acte urmărite",
         "health": "Ultima rulare cu toate actele principale verificate", "overdue": "întârziere: rularea programată nu s-a încheiat de {d} zile",
         "never": "încă niciuna", "nochanges": "Nicio modificare în actele verificate.",
-        "firecrawl_tip": ("Unele site-uri au refuzat citirea automată. Conectarea Firecrawl (primul pas al "
-                          "asistentului, `reading`, sau cereți schimbarea mai târziu) le permite scripturilor să le "
-                          "citească; este un serviciu plătit cu o cotă lunară gratuită, iar autentificarea o faceți "
-                          "dvs.")},
+        "firecrawl_tip": ("Unele site-uri au refuzat citirea automată. Firecrawl le poate citi, fără garanție: "
+                          "scripturile de monitorizare au nevoie de CLI-ul său, autentificat de dvs. și adăugat la "
+                          "motoarele monitorizării (primul pas al asistentului, `reading`, sau cereți schimbarea mai "
+                          "târziu). Este un serviciu plătit cu o cotă lunară gratuită.")},
     "ru": {
         "title": "Мониторинг законов", "result": {"OK": "без изменений", "CHANGES": "есть изменения",
                                                   "INCOMPLETE": "неполно: проверены не все главные акты",
@@ -94,9 +97,10 @@ T = {
         "signals": "Monitorul Oficial (MD): номера, где упомянуты отслеживаемые акты",
         "health": "Последний прогон, где проверены все главные акты", "overdue": "просрочено: плановый прогон не завершался {d} дн.",
         "never": "ещё не было", "nochanges": "В проверенных актах изменений нет.",
-        "firecrawl_tip": ("Сайты отказали в автоматическом чтении. Подключение Firecrawl (первый шаг мастера "
-                          "`reading` или попросите изменить позже) позволит скриптам их читать; это платный сервис "
-                          "с бесплатным месячным лимитом, вход вы делаете сами.")},
+        "firecrawl_tip": ("Некоторые сайты отказали в автоматическом чтении. Firecrawl может их прочитать, без "
+                          "гарантии: скриптам мониторинга нужен его CLI, в который вы входите сами и который "
+                          "добавлен в способы чтения мониторинга (первый шаг мастера `reading` или попросите "
+                          "изменить позже). Это платный сервис с бесплатным месячным лимитом.")},
 }
 
 
@@ -113,16 +117,21 @@ def health(state: dict, today: _dt.date, schedule: str | None) -> dict:
     return {"last_complete": last, "days_since": days, "overdue": overdue}
 
 
-# Reasons a script engine could not read the page; Firecrawl reads many such sites (anti-bot pages, dropped
+# Reasons a script engine could not read the page, which Firecrawl may get past (anti-bot pages, dropped
 # connections). Other reasons (no source, uncalibrated reader, Gazette signal) are not helped by another engine.
 REFUSALS = ("blocked_403", "fetch_failed")
 
 
 def needs_firecrawl_tip(run: dict | None) -> bool:
-    """Suggest Firecrawl only when it was not among the run's engines and a site refused the scripts."""
+    """Suggest Firecrawl only when it was not among the run's engines and a site it is used on refused the scripts.
+
+    why the site: the engine skips Firecrawl outside its allowlist (EUR-Lex, just.ro…), so suggesting it for a
+    refusal there would sell a paid service that the run would not even call.
+    """
     if not run or "firecrawl" in (run.get("engines") or []):
         return False
-    return any(set(u.get("reasons") or []) & set(REFUSALS) for u in run.get("unverified") or [])
+    return any(set(u.get("reasons") or []) & set(REFUSALS) and firecrawl_format(u.get("url") or "") is not None
+               for u in run.get("unverified") or [])
 
 
 def _name(x: dict) -> str:

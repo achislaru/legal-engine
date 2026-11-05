@@ -135,9 +135,23 @@ class RunEngines(Base):
         self.assertNotIn("engines", out)   # nothing of the day to inherit; the tip then treats it as no Firecrawl
 
 
+LEGIS_URL = "https://www.legis.md/cautare/getResults?doc_id=1&lang=ro"
+
+
+def refused_adapter(url, fail):
+    """A reader whose site refused the scripts, on `url` (the tip depends on the site: D10)."""
+    def fn(a, fetcher, today):
+        page = fetcher.get(url)
+        ev = Evidence(url=url, fetched_at=page.fetched_at, sha256="a" * 64, parser="fake", parser_calibrated=True,
+                      via=page.via)
+        return AdapterResult(act_id=a["id"], adapter="fake", status=fail, evidence=ev, error="site down")
+    return lambda a: ("fake", fn)
+
+
 class FirecrawlTip(Base):
-    def blocked_run(self, engines, fail="blocked_403", **kw):
-        return self.run_with([act()], adapter([], fail=fail), engines=engines, **kw)
+    def blocked_run(self, engines, fail="blocked_403", url=LEGIS_URL, **kw):
+        # why legis.md: the tip shows only for a site Firecrawl may read (allowlist, D1/D10)
+        return self.run_with([act()], refused_adapter(url, fail), engines=engines, **kw)
 
     def test_digest_tip_shown_only_without_firecrawl_and_with_refusals(self):
         cases = [
@@ -145,6 +159,13 @@ class FirecrawlTip(Base):
             (self.blocked_run(["urllib", "firecrawl"], dry_run=True), False),         # Firecrawl already tried
             (self.blocked_run(["urllib"], fail="parse_failed", dry_run=True), False),  # no refusal
             ({**self.blocked_run(None, fail="fetch_failed", dry_run=True), "engines": None}, True),  # old run.json
+            # refused on a site Firecrawl is not used for (EUR-Lex, just.ro, any other): no tip
+            (self.blocked_run(["urllib"], url="https://eur-lex.europa.eu/eli/dir/2011/83/oj", dry_run=True), False),
+            (self.blocked_run(["urllib"], url="https://legislatie.just.ro/Public/DetaliiDocument/1", dry_run=True),
+             False),
+            (self.blocked_run(["urllib"], url=URL, dry_run=True), False),
+            (self.blocked_run(["urllib"], url="https://monitorul.gov.md/ro/monitor/view/1", fail="fetch_failed",
+                              dry_run=True), True),
         ]
         for run, shown in cases:
             self.assertEqual(digest.needs_firecrawl_tip(run), shown, run.get("engines"))
@@ -159,6 +180,20 @@ class FirecrawlTip(Base):
         self.assertIn("Firecrawl", digest.T["en"]["firecrawl_tip"])
         self.assertIn("citirea automată", digest.T["ro"]["firecrawl_tip"])
         self.assertIn("автоматическом чтении", digest.T["ru"]["firecrawl_tip"])
+        # D10: honest: "may read", no guarantee, the scripts need the CLI (an MCP connection does not help them)
+        for lang, words in {"en": ("may read", "no guarantee", "CLI"),
+                            "ro": ("le poate citi", "fără garanție", "CLI"),
+                            "ru": ("может их прочитать", "без гарантии", "CLI")}.items():
+            for w in words:
+                self.assertIn(w, digest.T[lang]["firecrawl_tip"], (lang, w))
+            self.assertNotIn("lets the scripts read", digest.T[lang]["firecrawl_tip"])
+        # D8/D10: the agent uses Firecrawl in a conversation only with the user's consent, and nothing is promised
+        for lang, words in {"en": ("if you allowed it for conversations", "no guarantee"),
+                            "ro": ("dacă i-ați permis folosirea în conversații", "fără garanție"),
+                            "ru": ("если вы разрешили его для диалогов", "без гарантии")}.items():
+            blocked = " ".join(report.P[lang]["fix"]["blocked"])
+            for w in words:
+                self.assertIn(w, blocked, (lang, w))
         for lang in ("ro",):   # Romanian with comma-below letters, never the old cedilla ones
             self.assertFalse(set("şţŞŢ") & set(digest.T[lang]["firecrawl_tip"] + "".join(report.P[lang]["fix"]["blocked"])))
 
