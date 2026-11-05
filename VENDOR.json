@@ -19,7 +19,7 @@
     "legal-employment": "optional module: employment"
   },
   "network": {
-    "note": "Hosts the monitoring scripts read (GET of public pages, paced). With the optional `firecrawl` engine the page addresses go to Firecrawl through the user's own logged-in CLI; nothing else is sent.",
+    "note": "Hosts the monitoring scripts read (GET of public pages, paced). With Firecrawl, only where the user allowed it (the `firecrawl` engine and `legal_watch.py fetch` send only legis.md and monitorul.gov.md pages), the page addresses go to Firecrawl through the user's own logged-in CLI; nothing else is sent.",
     "hosts": ["www.legis.md", "monitorul.gov.md", "legislatie.just.ro", "eur-lex.europa.eu",
               "publications.europa.eu", "web.archive.org", "api.firecrawl.dev"]
   }

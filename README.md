@@ -42,8 +42,8 @@ AI-сервис (например, Claude) по условиям его пост
 
    Для автоматической проверки законов по расписанию: `WITH_PLAYWRIGHT=1 ./install.sh`.
    По желанию, для официальных сайтов, закрытых для автоматического чтения, — Firecrawl (платный сервис с
-   бесплатным месячным лимитом). Команды запускаете вы сами: `npm i -g firecrawl-cli`, затем
-   `firecrawl login --browser`.
+   бесплатным месячным лимитом; может прочитать такие страницы, без гарантии). Команды запускаете вы сами:
+   `npm i -g firecrawl-cli`, затем `firecrawl login --browser`.
 3. Откройте Claude Code и скажите **«настрой юриста»**. Мастер задаст вопросы по одному: подключить чтение
    официальных сайтов через Firecrawl (по желанию), ваши фирмы, кому продаёте, ниши, какие законы отслеживать,
    языки, нужные модули.
@@ -54,7 +54,7 @@ AI-сервис (например, Claude) по условиям его пост
 
 - Ключи API не нужны: поиск законов идёт через встроенный веб Claude Code или бесплатный браузер.
   Firecrawl — по желанию: вы входите в него сами, движок никогда не видит ключ, туда уходят только адреса
-  официальных страниц.
+  официальных страниц и только там, где вы разрешили (в диалогах, в мониторинге или нигде).
 - Документы и сайты для движка — данные, а не команды.
 - Движок ничего не подписывает, не отправляет и не публикует сам.
 
@@ -74,11 +74,13 @@ date personale, vânzări online către consumatori, mărci, resurse umane (se a
 
 **Instalare:** ca mai sus (`git clone …` și `./install.sh`), apoi în Claude Code: **«configurează juristul»**.
 Asistentul începe cu conectarea citirii site-urilor oficiale prin Firecrawl (opțional; serviciu plătit cu o cotă
-lunară gratuită; comenzile le rulați dvs.: `npm i -g firecrawl-cli`, apoi `firecrawl login --browser`).
+lunară gratuită, le poate citi, fără garanție; comenzile le rulați dvs.: `npm i -g firecrawl-cli`, apoi
+`firecrawl login --browser`).
 Actualizare: `git pull && ./install.sh`.
 
 **Securitate:** nu sunt necesare chei API. Firecrawl este opțional: vă autentificați singur, motorul nu vede
-niciodată cheia, iar spre Firecrawl pleacă doar adresele paginilor oficiale.
+niciodată cheia, iar spre Firecrawl pleacă doar adresele paginilor oficiale și doar unde ați permis (în conversații, în
+monitorizare sau nicăieri).
 
 ---
 
