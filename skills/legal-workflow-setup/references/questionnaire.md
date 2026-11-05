@@ -2,7 +2,8 @@
 
 One question per message, in the conversation language, with answer options: the recommended one first, each
 with one plain line on what it leads to. "Default" and "skip" are always accepted. Explain once, at the start,
-that every answer becomes an ordinary text file in the profile which the user can edit later.
+that the answers become ordinary text files in the profile which the user can edit later (step 1 `reading`
+writes only a note in the step table).
 
 Never invent a fact about the user. An answer that cannot be used gets one follow-up; after that the unknown part is
 written as `[DE COMPLETAT: …]`.
@@ -25,8 +26,9 @@ folder stays as it is).
 
 ## Depth
 
-Ask once: **quick** (recommended for a first try, about 5 minutes: steps 1–4; language taken from the user's
-messages, side and risk by default, the rest later: law monitoring and documents stay for later) or **full** (about 15 minutes, every step). Quick still writes
+Ask once: **quick** (recommended for a first try, about 5 minutes: steps 1–4, where step 1 `reading` recommends
+"later"; language taken from the user's messages, side and risk by default, the rest later: law monitoring and
+documents stay for later) or **full** (about 15 minutes, every step). Quick still writes
 the files of steps 5 and 6 and marks them `done` with the note `default`: conversation in the language of the
 user's messages, documents in Romanian; risk threshold default; represented party the firm of step 2 when there is
 exactly one, otherwise "ask in each matter".
@@ -52,29 +54,37 @@ exactly one, otherwise "ask in each matter".
 Optional, and never needed by a module: "skip" keeps today's behaviour. One question per message, as everywhere.
 
 **Why.** Official portals often refuse plain requests and the host's web tools (on 2026-11-05: legis.md answered
-403, legislatie.just.ro dropped the connection, EUR-Lex gave empty answers). Firecrawl is a service that reads
-public pages for the engine. Without it those acts are checked by hand in the user's own browser, and in unattended
-monitoring runs they stay "not verified".
+403, legislatie.just.ro dropped the connection; EU acts are still read free through the Publications Office).
+Firecrawl is a service that may read such public pages for the engine, with no guarantee (not yet checked live).
+Without it those acts are checked by hand in the user's own browser, and in unattended monitoring runs they stay
+"not verified". Monitoring sends it only legis.md and monitorul.gov.md pages
+(`../legal-watch/references/engines.md`).
 
 **Cost** (on 2026-11-05, check firecrawl.dev/pricing): Free plan 1,000 credits a month, 1 credit per page; Hobby
 $19 a month (5,000 credits); Standard $99 a month (100,000 credits). Estimate for the user: monitoring costs about
-the number of acts on refusing sites × runs a month; a matter reads a few pages.
+the number of acts on legis.md and monitorul.gov.md that refuse plain requests × runs a month; a matter reads a few
+pages.
 
 **Data.** Only the addresses of public official pages go to Firecrawl (a US service), never document text or
 personal data.
 
-"Shall the engine read official sites through Firecrawl?" Options:
+"Shall the engine read official sites through Firecrawl?" Ask it in the message that gives the cost and the
+data above. Options:
 
-- connect both (recommended: conversations and scheduled monitoring);
-- only for conversations (the MCP tools);
+- connect both (recommended in the full depth: conversations and scheduled monitoring);
+- only for conversations (the MCP tools, or the CLI through the engine's reader);
 - only for monitoring (the CLI);
+- later (recommended in the quick depth, then shown first: nothing is connected now; `legal-workflow-update`
+  connects it any time);
 - skip (today's behaviour: the host's web tools, then the user's browser, acts checked by hand).
 
-Turning on a paid service needs the user's literal "yes" (`../legal-workflow/SKILL.md`); say the cost above before
-asking for it.
+Turning on a paid service needs the user's literal "yes" (`../legal-workflow/SKILL.md`): one of the three connect
+options, chosen after the cost was said, is that yes for this step; a vague answer gets one follow-up.
 
-**Connect.** The user runs every command themselves: in Claude Code they type `! <command>` in the chat, elsewhere
-they use a terminal. The agent never types a login command, a key or a token.
+**Connect.** First the user creates a Firecrawl account at firecrawl.dev (the Free plan is enough to start); the
+sign-in commands below then open the browser to it. The user runs every command themselves, best in a plain
+terminal: in Claude Code `! <command>` in the chat works too, but its output enters the conversation. The agent
+never types a login command, a key or a token. Conversations need the MCP or the CLI; monitoring needs the CLI.
 
 - MCP in Claude Code: `claude mcp add --scope user --transport http firecrawl https://mcp.firecrawl.dev/v2/mcp-oauth`,
   then `/mcp` → firecrawl → sign in in the browser.
@@ -88,14 +98,25 @@ Never use a key in chat, the `--api-key` option, the CLI's credentials file, `fi
 **Verify.**
 
 - MCP: Firecrawl tools (for example a scrape tool named `firecrawl_scrape`) appear in the agent's own tool list. If
-  they don't, a reconnect or a new session may be needed: `legal_profile.py step set reading --status pending --note
-  "waiting: restart for MCP tools"`; the wizard goes on and asks again at the next run.
-- CLI: run `python3 <engine>/tools/doctor.py` and read the `Firecrawl CLI` line: `OK` means logged in.
+  they don't, a reconnect or a new session may be needed.
+- CLI: run `python3 <engine>/tools/doctor.py` and read the `Firecrawl CLI` line: `OK` means logged in; `installed,
+  not logged in` or `login state unknown` means not yet.
 - No test scrape without a separate "yes": it costs a credit.
 
-**Record.** `legal_profile.py step set reading --status done --note "mcp: on; cli: on"` (each part `on`, `off` or
-`later`), or `--status skipped --note "not connected"`. Tell the user that step 8 (`laws`) offers the `firecrawl`
-engine when the CLI is logged in, and that `legal-workflow-update` connects Firecrawl later at any time.
+**Record** (the note is the consent the other skills read; grammar `conversation: on|off; monitoring: on|off`):
+
+- connected as chosen: `legal_profile.py step set reading --status done --note "conversation: on; monitoring: on"`
+  (`off` for the part not chosen);
+- chosen but not working yet: `--status pending --note "conversation: on; monitoring: on; waiting: <what>"`, for
+  example `waiting: restart for MCP tools` or `waiting: cli login` (the CLI was chosen and the doctor line is not
+  `OK`); the wizard goes on and asks again at the next run, and until then Firecrawl is not used;
+- later: `--status skipped --note "later"`; skip: `--status skipped --note "not connected"`.
+
+Firecrawl is used in conversations only when the row is `done` with `conversation: on`
+(`../legal-workflow/references/law-check.md`), and in monitoring only when `firecrawl` is in the watchlist
+engines; a skipped or pending row never turns it on, even when an MCP server is connected. Tell the user that step 8
+(`laws`) offers the `firecrawl` engine with `monitoring: on`, and that `legal-workflow-update` connects or
+disconnects Firecrawl later at any time.
 
 ### 2. `firms`
 
@@ -175,10 +196,10 @@ what is missing and what each missing part serves for the modules that are on; r
 | Python environment `.venv` | every document (DOCX), required | `cd <engine> && ./install.sh` |
 | LibreOffice (`soffice`), Poppler (`pdftoppm`) | visual check of a document as PDF | the user's package manager (e.g. `brew install --cask libreoffice`, `brew install poppler`) |
 | `tesseract` with ron, rus, eng | scanned contracts | `brew install tesseract tesseract-lang` |
-| Playwright Chromium | law monitoring without a conversation (`legal-watch`); it never passes an anti-bot page, so Moldovan and Romanian acts are still checked through the user's browser in a conversation | `cd <engine> && WITH_PLAYWRIGHT=1 ./install.sh` |
-| Firecrawl CLI (optional, step 1) | monitoring of sites that refuse plain requests | the user runs `npm i -g firecrawl-cli` and `firecrawl login --browser` themselves |
+| Playwright Chromium | law monitoring without a conversation (`legal-watch`); it never passes an anti-bot page, so Moldovan and Romanian acts are still checked by hand in a conversation | `cd <engine> && WITH_PLAYWRIGHT=1 ./install.sh` |
+| Firecrawl CLI (optional, step 1) | only when the `reading` note has `monitoring: on`: monitoring of legis.md and monitorul.gov.md when they refuse plain requests | shown, never installed by the agent: the user runs `npm i -g firecrawl-cli` and `firecrawl login --browser` themselves; not offered again when `reading` was skipped |
 
-One request for approval for the whole list (options: install all (recommended when only required parts are missing)
+One request for approval for the whole list (the Firecrawl row is not part of it) (options: install all (recommended when only required parts are missing)
 · only the required ones · none now). Install only after the user's literal "yes" for that list. Declined parts are
 written in the step note (`--note "no LibreOffice: visual check off"`); the work goes on without them. The step is
 `done` when everything required is present, `skipped` when the user declined a required part.
@@ -190,4 +211,4 @@ edited by hand), the modules on and off, steps still pending and why, and that `
 of it later. The profile files stay on this computer and never go into the engine repository; what is said in
 the conversation and the documents the agent reads are processed by the AI host the user chose, under its
 provider's terms. The engine itself sends nothing anywhere, except the addresses of official pages it asks Firecrawl
-to read when the user connected it.
+to read where the user allowed it (step `reading`).
