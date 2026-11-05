@@ -57,6 +57,10 @@ FIRECRAWL_FORMAT_BY_HOST: dict[str, str] = {
     "www.legis.md": "markdown", "legis.md": "markdown",
     "monitorul.gov.md": "rawHtml", "www.monitorul.gov.md": "rawHtml",
 }
+# Site → milliseconds Firecrawl waits before it reads the page. Live run of 2026-11-05: legis.md fills the act card
+# by script; read at once, Firecrawl returned only "Conținutul se încarcă..." (39 characters, still a credit); with
+# 6 s it returned the whole card and the calibrated reader found the versions.
+FIRECRAWL_WAIT_MS_BY_HOST: dict[str, int] = {"www.legis.md": 6000, "legis.md": 6000}
 _HTML_FORMATS = ("rawHtml", "html")
 
 # Signs of an anti-bot check page. A match means blocked, without any interaction.
@@ -296,7 +300,9 @@ def firecrawl_argv(binary: str, url: str, fmt: str) -> list[str]:
     """
     if urlparse(url).scheme not in ("http", "https") or not urlparse(url).netloc:
         raise FetchConfigError(FC_BAD_URL)
-    return [binary, "scrape", url, "--format", fmt, "--max-age", "0", "--json"]
+    argv = [binary, "scrape", url, "--format", fmt, "--max-age", "0", "--json"]
+    wait = FIRECRAWL_WAIT_MS_BY_HOST.get((urlparse(url).hostname or "").lower())
+    return argv + ["--wait-for", str(wait)] if wait else argv
 
 
 def parse_firecrawl_json(stdout: str, fmt: str) -> tuple[str, dict]:

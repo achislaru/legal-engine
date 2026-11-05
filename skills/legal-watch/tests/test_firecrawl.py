@@ -90,7 +90,12 @@ class Lists(unittest.TestCase):
 
     def test_argv_exact_and_safe(self):
         argv = F.firecrawl_argv(FAKE_BIN, LEGIS, "markdown")
-        self.assertEqual(argv, [FAKE_BIN, "scrape", LEGIS, "--format", "markdown", "--max-age", "0", "--json"])
+        # legis.md fills its act card by script: Firecrawl waits 6 s (live run of 2026-11-05).
+        self.assertEqual(argv, [FAKE_BIN, "scrape", LEGIS, "--format", "markdown", "--max-age", "0", "--json",
+                                "--wait-for", "6000"])
+        gazette = "https://monitorul.gov.md/ro"
+        self.assertEqual(F.firecrawl_argv(FAKE_BIN, gazette, "rawHtml"),
+                         [FAKE_BIN, "scrape", gazette, "--format", "rawHtml", "--max-age", "0", "--json"])
         for bad in ("--api-key", "login", "view-config", "env"):
             self.assertNotIn(bad, argv)
         for url in ("--api-key=x", "file:///etc/passwd", "ftp://example.com/a", "", "https://"):
