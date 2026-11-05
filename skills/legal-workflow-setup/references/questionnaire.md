@@ -55,7 +55,7 @@ Optional, and never needed by a module: "skip" keeps today's behaviour. One ques
 
 **Why.** Official portals often refuse plain requests and the host's web tools (on 2026-11-05: legis.md answered
 403, legislatie.just.ro dropped the connection; EU acts are still read free through the Publications Office).
-Firecrawl is a service that may read such public pages for the engine, with no guarantee (not yet checked live).
+Firecrawl is a service that may read such public pages for the engine, with no guarantee (on 2026-11-05 it read legis.md; legislatie.just.ro did not answer).
 Without it those acts are checked by hand in the user's own browser, and in unattended monitoring runs they stay
 "not verified". Monitoring sends it only legis.md and monitorul.gov.md pages
 (`../legal-watch/references/engines.md`).

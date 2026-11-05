@@ -38,8 +38,8 @@ differently); a held next version whose date has passed while the page still sho
 not yet consolidated) is "not verified", never "in force". An act named in a new issue of the Moldovan Official
 Gazette stays "not verified" until a new version is read or it is checked by hand.
 
-Readers calibrated today: legis.md through markdown (the `firecrawl` or `command` engine; Firecrawl's own
-markdown is still to be checked live), EUR-Lex and Cellar, the Gazette's
+Readers calibrated today: legis.md through markdown (the `firecrawl` engine, checked live on 2026-11-05, or a
+`command` engine), EUR-Lex and Cellar, the Gazette's
 table of contents, archived copies. Not yet: legis.md HTML and both just.ro readers. So with the free engines
 most Moldovan and Romanian acts end "not verified" and need the host check; acts without a source in the catalog
 always do.

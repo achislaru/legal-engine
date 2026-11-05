@@ -18,10 +18,13 @@ to public pages only, waits 5–15 s between pages, and never fills forms, logs 
 **Recommended order with Firecrawl: `urllib,firecrawl,host`.** Free first: a page `urllib` reads costs nothing, so
 Firecrawl is used only where plain requests are refused (a conversation puts Firecrawl first instead, when allowed:
 `<legal-workflow>/references/law-check.md`). A site that refuses `urllib` on 3 days in a row gets Firecrawl first
-there (`issues.md`, demotion), so the refused request is not repeated every run. Whether Firecrawl passes the
-protection of legis.md is not yet checked live: a page it returns as a challenge is still "not verified". EU acts
+there (`issues.md`, demotion), so the refused request is not repeated every run. Live run of 2026-11-05: Firecrawl
+read legis.md past its protection (the engine waits 6 s there: read at once, the page is only "Conținutul se
+încarcă...") and the calibrated reader found the versions; the Gazette home page came back whole as `rawHtml`. No
+guarantee for later days: a page returned as a challenge is still "not verified". EU acts
 stay free: EUR-Lex is not on Firecrawl's list, and the Cellar fallback reads them (it needs `urllib`). Romanian acts
-on legislatie.just.ro are not sent to Firecrawl until its reader is calibrated on a live page; they keep the
+on legislatie.just.ro are not sent to Firecrawl until its reader is calibrated on a live page (on 2026-11-05 the
+portal did not answer Firecrawl within 50 s either); they keep the
 archived-copy route and the check by hand.
 
 **Credits (an estimate).** Per run, one page per act on legis.md or monitorul.gov.md that `urllib` could not read,

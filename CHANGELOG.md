@@ -39,7 +39,9 @@ works as in 1.1.0.
   may help, with no guarantee.
 - **Reading order in conversation**, one rule in `legal-workflow/references/law-check.md`: Firecrawl when allowed,
   then the host's web tools, then the user's browser after their yes. Cookie and tracker screening stays plain GET.
-- Live calibration pending: whether Firecrawl passes the protection of legis.md is not yet checked on live pages.
+- Live check (2026-11-05, 12 pages): Firecrawl read legis.md past its protection when it waits 6 s (now built in:
+  `--wait-for 6000` for legis.md) and the calibrated reader found the versions; the Gazette home page parsed from
+  `rawHtml`; a monitoring run read an act end to end. legislatie.just.ro did not answer within 50 s, so it stays off.
 
 ## 1.1.0 — 2026-11-05
 
