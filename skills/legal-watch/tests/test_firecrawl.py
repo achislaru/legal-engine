@@ -25,7 +25,7 @@ REPO = SKILL.parents[1]
 FAKE_BIN = "/opt/fake/bin/firecrawl"
 LEGIS = "https://www.legis.md/cautare/getResults?doc_id=1&lang=ro"
 EURLEX = "https://eur-lex.europa.eu/eli/dir/2011/83/oj"
-# The Gazette is the allowlisted HTML site (D1): the tests that need Firecrawl to run on HTML use it.
+# The Gazette is the allowlisted HTML site: the tests that need Firecrawl to run on HTML use it.
 GAZETTE = "https://monitorul.gov.md/ro/monitor/view/1"
 HTML = "<html><head><title>Act</title></head><body><p>Articolul 1</p></body></html>"
 MD = "# Lege\n\nArticolul 1. Text of the act.\n"
@@ -72,7 +72,7 @@ class Lists(unittest.TestCase):
             self.assertEqual(F.firecrawl_format(url), "markdown", url)
         for url in (GAZETTE, "https://www.monitorul.gov.md/ro"):
             self.assertEqual(F.firecrawl_format(url), "rawHtml", url)
-        # D1: an allowlist; any other site gets no format, so Firecrawl is not used there
+        # an allowlist: any other site gets no format, so Firecrawl is not used there
         for url in (EURLEX, "https://legislatie.just.ro/Public/DetaliiDocument/1", "https://web.archive.org/web/2026/x",
                     "https://publications.europa.eu/resource/celex/32011L0083", "not a url", ""):
             self.assertIsNone(F.firecrawl_format(url), url)
@@ -96,7 +96,7 @@ class Parse(unittest.TestCase):
         wrapped = json.dumps({"success": True, "data": {"markdown": MD, "metadata": {"title": "T"}}})
         self.assertEqual(F.parse_firecrawl_json(wrapped, "markdown"), (MD, {"title": "T"}))
         self.assertEqual(F.parse_firecrawl_json(json.dumps({"rawHtml": HTML, "metadata": []}), "rawHtml")[1], {})
-        # D2/X6: no html <-> rawHtml fallback: trimmed html may lack the metadata the parsers need
+        # no html <-> rawHtml fallback: trimmed html may lack the metadata the parsers need
         cases = {
             payload("html", HTML): "firecrawl: format rawHtml not returned",
             "not json": "firecrawl: unreadable output",
@@ -159,7 +159,7 @@ class Get(unittest.TestCase):
         self.assertEqual(f.get(GAZETTE).final_url, GAZETTE)
 
     def test_missing_or_invalid_status_is_a_failed_fetch(self):
-        """D2/X1: a page without a real status is never a 200: not verified, the next engine may try."""
+        """A page without a real status is never a 200: not verified, the next engine may try."""
         for meta in ({}, {"statusCode": None}, {"statusCode": True}, {"statusCode": False}, {"statusCode": "abc"},
                      {"statusCode": 99}, {"statusCode": 600}, {"statusCode": "2000"}, {"statusCode": 200.0},
                      {"statusCode": "²⁰⁰"}, []):
@@ -240,7 +240,7 @@ class Get(unittest.TestCase):
         self.assertNotIn(MARKER, repr(res))
 
     def test_non_json_output_is_unreadable_never_a_page(self):
-        """D2: no sniffing of non-JSON stdout: an error printed with exit 0 must not pass as a page."""
+        """No sniffing of non-JSON stdout: an error printed with exit 0 must not pass as a page."""
         for out, url in ((HTML, GAZETTE), (MD, LEGIS), (f"Error: Not authenticated {MARKER}", LEGIS)):
             with self.subTest(out=out[:20]):
                 f, _ = fetcher(proc(out))

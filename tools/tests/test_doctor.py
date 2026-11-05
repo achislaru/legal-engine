@@ -148,7 +148,7 @@ class FirecrawlCli(unittest.TestCase):
                 self.assertNotEqual(state, "logged-in")
 
     def test_strict_login_state(self):
-        """D6/X5/K9: logged in only on exit 0 with a line that starts with "authenticated" and nothing contrary."""
+        """Logged in only on exit 0 with a line that starts with "authenticated" and nothing contrary."""
         cases = [
             (FakeRun("Unauthenticated\n"), "not-logged-in"),
             (FakeRun("\x1b[33m✗\x1b[0m unauthenticated: run firecrawl login"), "not-logged-in"),

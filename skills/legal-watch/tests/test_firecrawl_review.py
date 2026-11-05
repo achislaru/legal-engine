@@ -1,7 +1,7 @@
-"""Review round 1 of the Firecrawl feature: one test per finding (no real CLI, no network).
+"""Firecrawl after the first review: one test per finding (no real CLI, no network).
 
-D1 allowlist (K1, K2, X4) · D3 fatal errors remembered (K7) · D4 argv error caught (K8) · D5 snapshot = hashed text
-(K3) · D7 `legal_watch.py fetch` (X2) · D9 `legal_watch.py engines set` (X7).
+The allowlist of sites, fatal CLI errors remembered per run, a refused URL as an error result, the snapshot of a
+markdown page, `legal_watch.py fetch` for conversations and `legal_watch.py engines set`.
 """
 
 from __future__ import annotations
@@ -42,7 +42,7 @@ class Engine:
 
 
 class Allowlist(unittest.TestCase):
-    """D1: Firecrawl only on sites whose reader can use it; elsewhere no CLI call, no credit, no failed attempt."""
+    """Firecrawl only on sites whose reader can use it; elsewhere no CLI call, no credit, no failed attempt."""
 
     def test_other_site_is_skipped_without_cli_call_or_pause(self):
         sleeps = []
@@ -56,7 +56,7 @@ class Allowlist(unittest.TestCase):
         self.assertTrue(f.accepts(LEGIS) and f.accepts(GAZETTE))
 
     def test_chain_skips_firecrawl_on_eurlex_so_cellar_stays_free(self):
-        """K1/X4: EUR-Lex's empty 202 from urllib ends the chain; Firecrawl is never asked (Cellar reads EU acts)."""
+        """EUR-Lex's empty 202 from urllib ends the chain; Firecrawl is never asked (Cellar reads EU acts)."""
         empty = F.page_result(EURLEX, "", status=202, via="urllib")
         url_e = Engine(empty)
         fc, run = fetcher(proc(payload("rawHtml", HTML, statusCode=200)))
@@ -65,7 +65,7 @@ class Allowlist(unittest.TestCase):
         self.assertEqual(run.calls, [])
 
     def test_chain_keeps_the_previous_failure_and_records_no_firecrawl_attempt(self):
-        """K2: just.ro refused urllib: Firecrawl is not tried (its reader is uncalibrated), no credit, no demotion."""
+        """just.ro refused urllib: Firecrawl is not tried (its reader is uncalibrated), no credit, no demotion."""
         refused = F.FetchResult(url=JUST, status=None, via="urllib", error="ConnectionResetError: reset")
         fc, run = fetcher(proc(payload("rawHtml", HTML, statusCode=200)))
         chain = F.ChainFetcher([Engine(refused), fc], names=["urllib", "firecrawl"])
@@ -100,7 +100,7 @@ class Allowlist(unittest.TestCase):
 
 
 class FatalErrorsRemembered(unittest.TestCase):
-    """D3/K7: not logged in, out of credits or no CLI: later pages get the same error at once, no call, no pause."""
+    """Not logged in, out of credits or no CLI: later pages get the same error at once, no call, no pause."""
 
     def test_fatal_errors_stop_later_calls(self):
         for stderr, msg in ((f"Not authenticated {MARKER}", NOT_LOGGED),
@@ -135,7 +135,7 @@ class FatalErrorsRemembered(unittest.TestCase):
 
 
 class ArgvErrorCaught(unittest.TestCase):
-    """D4/K8: a URL the argv builder refuses is a failed fetch, never an exception that stops the run."""
+    """A URL the argv builder refuses is a failed fetch, never an exception that stops the run."""
 
     def test_refused_url_is_an_error_result(self):
         f, run = fetcher(proc(), formats={"": "rawHtml"})       # a table that lets an empty host through
@@ -149,7 +149,7 @@ class ArgvErrorCaught(unittest.TestCase):
 
 
 class SnapshotIsTheHashedText(unittest.TestCase):
-    """D5/K3: the snapshot of a markdown page is the text the reader hashed, so its name matches evidence.sha256."""
+    """The snapshot of a markdown page is the text the reader hashed, so its name matches evidence.sha256."""
 
     def test_markdown_page_snapshot_is_md_to_text(self):
         md = "# Lege\n\n**Articolul 1.** [Text](https://www.legis.md/x) of the act.\n"
@@ -178,7 +178,7 @@ class CliBase(unittest.TestCase):
 
 
 class FetchCommand(CliBase):
-    """D7/X2: the safe entry point for conversations: the CLI's output never reaches the caller, only the page."""
+    """The safe entry point for conversations: the CLI's output never reaches the caller, only the page."""
 
     def fetch(self, out, url=LEGIS, name="page.md", **kw):
         fake, run = fetcher(out, **kw)
@@ -258,7 +258,7 @@ class FetchCommand(CliBase):
 
 
 class EnginesSet(CliBase):
-    """D9/X7: connect or disconnect Firecrawl later: only settings.engines changes; acts, state and texts stay."""
+    """Connect or disconnect Firecrawl later: only settings.engines changes; acts, state and texts stay."""
 
     def setUp(self):
         super().setUp()

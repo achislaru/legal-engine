@@ -139,7 +139,7 @@ LEGIS_URL = "https://www.legis.md/cautare/getResults?doc_id=1&lang=ro"
 
 
 def refused_adapter(url, fail):
-    """A reader whose site refused the scripts, on `url` (the tip depends on the site: D10)."""
+    """A reader whose site refused the scripts, on `url` (the tip depends on the site)."""
     def fn(a, fetcher, today):
         page = fetcher.get(url)
         ev = Evidence(url=url, fetched_at=page.fetched_at, sha256="a" * 64, parser="fake", parser_calibrated=True,
@@ -150,7 +150,7 @@ def refused_adapter(url, fail):
 
 class FirecrawlTip(Base):
     def blocked_run(self, engines, fail="blocked_403", url=LEGIS_URL, **kw):
-        # why legis.md: the tip shows only for a site Firecrawl may read (allowlist, D1/D10)
+        # why legis.md: the tip shows only for a site Firecrawl may read (allowlist)
         return self.run_with([act()], refused_adapter(url, fail), engines=engines, **kw)
 
     def test_digest_tip_shown_only_without_firecrawl_and_with_refusals(self):
@@ -180,14 +180,14 @@ class FirecrawlTip(Base):
         self.assertIn("Firecrawl", digest.T["en"]["firecrawl_tip"])
         self.assertIn("citirea automată", digest.T["ro"]["firecrawl_tip"])
         self.assertIn("автоматическом чтении", digest.T["ru"]["firecrawl_tip"])
-        # D10: honest: "may read", no guarantee, the scripts need the CLI (an MCP connection does not help them)
+        # honest: "may read", no guarantee, the scripts need the CLI (an MCP connection does not help them)
         for lang, words in {"en": ("may read", "no guarantee", "CLI"),
                             "ro": ("le poate citi", "fără garanție", "CLI"),
                             "ru": ("может их прочитать", "без гарантии", "CLI")}.items():
             for w in words:
                 self.assertIn(w, digest.T[lang]["firecrawl_tip"], (lang, w))
             self.assertNotIn("lets the scripts read", digest.T[lang]["firecrawl_tip"])
-        # D8/D10: the agent uses Firecrawl in a conversation only with the user's consent, and nothing is promised
+        # the agent uses Firecrawl in a conversation only with the user's consent, and nothing is promised
         for lang, words in {"en": ("if you allowed it for conversations", "no guarantee"),
                             "ro": ("dacă i-ați permis folosirea în conversații", "fără garanție"),
                             "ru": ("если вы разрешили его для диалогов", "без гарантии")}.items():
