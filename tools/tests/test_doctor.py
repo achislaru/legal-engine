@@ -112,15 +112,15 @@ class Vendor(unittest.TestCase):
 class FakeRun:
     """Stands in for subprocess.run: records argv and kwargs, answers with fixed text or raises."""
 
-    def __init__(self, stdout: str = "", stderr: str = "", exc: BaseException | None = None):
-        self.stdout, self.stderr, self.exc = stdout, stderr, exc
+    def __init__(self, stdout: str = "", stderr: str = "", exc: BaseException | None = None, rc: int = 0):
+        self.stdout, self.stderr, self.exc, self.rc = stdout, stderr, exc, rc
         self.calls: list[tuple[list[str], dict]] = []
 
     def __call__(self, argv, **kwargs):
         self.calls.append((list(argv), kwargs))
         if self.exc:
             raise self.exc
-        return subprocess.CompletedProcess(argv, 0, self.stdout, self.stderr)
+        return subprocess.CompletedProcess(argv, self.rc, self.stdout, self.stderr)
 
 
 FAKE_PATH = "/opt/fake/bin/firecrawl"
@@ -146,6 +146,28 @@ class FirecrawlCli(unittest.TestCase):
                 state = doctor.firecrawl_cli(which=have, run=FakeRun(out, err))
                 self.assertEqual(state, "not-logged-in")
                 self.assertNotEqual(state, "logged-in")
+
+    def test_strict_login_state(self):
+        """D6/X5/K9: logged in only on exit 0 with a line that starts with "authenticated" and nothing contrary."""
+        cases = [
+            (FakeRun("Unauthenticated\n"), "not-logged-in"),
+            (FakeRun("\x1b[33m✗\x1b[0m unauthenticated: run firecrawl login"), "not-logged-in"),
+            (FakeRun("Error: authenticated request failed", rc=1), "unknown"),
+            (FakeRun("Authenticated", rc=1), "unknown"),
+            (FakeRun("Not authenticated", rc=1), "not-logged-in"),
+            (FakeRun("", "unauthenticated", rc=2), "not-logged-in"),
+            (FakeRun("Authentication failed"), "unknown"),
+            (FakeRun("Authenticated\nError: credits unavailable"), "unknown"),
+            (FakeRun("Authenticated", "Invalid API key"), "unknown"),
+            (FakeRun("Authenticated", "not authenticated"), "not-logged-in"),
+            (FakeRun("Status: authenticated"), "unknown"),          # not at the start of a line
+            (FakeRun("authenticatedly odd"), "unknown"),
+            (FakeRun("  ● Authenticated via FIRECRAWL login\nCredits: 10"), "logged-in"),
+            (FakeRun("\x1b[1m\x1b[32m✓ AUTHENTICATED\x1b[0m\r\n"), "logged-in"),
+        ]
+        for run, want in cases:
+            with self.subTest(out=run.stdout, err=run.stderr, rc=run.rc):
+                self.assertEqual(doctor.firecrawl_cli(which=have, run=run), want)
 
     def test_unknown_on_odd_output_timeout_and_error(self):
         cases = (FakeRun("something else entirely"), FakeRun(""), FakeRun(None, None),
@@ -199,8 +221,8 @@ class FirecrawlCli(unittest.TestCase):
 
     def test_main_lines_match_the_contract(self):
         expected = {
-            "Authenticated": "OK   Firecrawl CLI — logged in: reads official pages that refuse plain requests "
-                             "(paid service you connected)",
+            "Authenticated": "OK   Firecrawl CLI — logged in: may read official pages that refuse plain requests, "
+                             "no guarantee (paid service you connected)",
             "Not authenticated": "--   Firecrawl CLI — installed, not logged in: run firecrawl login --browser yourself",
             "???": "--   Firecrawl CLI — installed, login state unknown: run firecrawl --status yourself",
         }
@@ -208,8 +230,9 @@ class FirecrawlCli(unittest.TestCase):
             with self.subTest(text=text):
                 self.assertIn(want, self._main(FakeRun(text))[1].splitlines())
         _, printed = self._main(FakeRun(), which=lambda _n: None)
-        self.assertIn("--   Firecrawl CLI — optional: reads official pages that refuse plain requests; "
-                      "npm i -g firecrawl-cli, then firecrawl login --browser", printed.splitlines())
+        self.assertIn("--   Firecrawl CLI — optional: may read official pages that refuse plain requests, no "
+                      "guarantee; monitoring scripts need this CLI: npm i -g firecrawl-cli, then firecrawl login "
+                      "--browser", printed.splitlines())
 
     def test_install_runs_no_npm(self):
         install = (Path(__file__).resolve().parents[2] / "install.sh").read_text(encoding="utf-8")

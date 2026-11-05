@@ -37,14 +37,20 @@ OPTIONAL_CMDS = {
 }
 PLAYWRIGHT_CACHES = (Path.home() / "Library/Caches/ms-playwright", Path.home() / ".cache/ms-playwright")
 ANSI = re.compile(r"\x1b\[[0-9;]*[A-Za-z]")
+# why "may read, no guarantee": whether Firecrawl gets past a site's anti-bot check is not promised by anyone;
+# the scripts (scheduled monitoring) need the CLI, a hosted MCP connection does not serve them.
 FIRECRAWL_LINES = {
-    "logged-in": (True, "Firecrawl CLI",
-                  "logged in: reads official pages that refuse plain requests (paid service you connected)"),
+    "logged-in": (True, "Firecrawl CLI", "logged in: may read official pages that refuse plain requests, "
+                  "no guarantee (paid service you connected)"),
     "not-logged-in": (None, "Firecrawl CLI", "installed, not logged in: run firecrawl login --browser yourself"),
     "unknown": (None, "Firecrawl CLI", "installed, login state unknown: run firecrawl --status yourself"),
-    "absent": (None, "Firecrawl CLI", "optional: reads official pages that refuse plain requests; "
-               "npm i -g firecrawl-cli, then firecrawl login --browser"),
+    "absent": (None, "Firecrawl CLI", "optional: may read official pages that refuse plain requests, no guarantee; "
+               "monitoring scripts need this CLI: npm i -g firecrawl-cli, then firecrawl login --browser"),
 }
+# A status line that says "logged in": only symbols or spaces (a bullet, a tick) before the word.
+FIRECRAWL_OK_LINE = re.compile(r"^[\W_]*authenticated\b", re.M)
+FIRECRAWL_LOGGED_OUT = ("not authenticated", "unauthenticated")
+FIRECRAWL_CONTRARY = FIRECRAWL_LOGGED_OUT + ("fail", "error", "invalid")
 
 
 def engine_skills(root: Path = ROOT) -> list[str]:
@@ -96,13 +102,15 @@ def firecrawl_cli(which=shutil.which, run=subprocess.run, timeout: float = 20) -
         done = run([path, "--status"], capture_output=True, text=True, timeout=timeout,
                    stdin=subprocess.DEVNULL)
         text = ANSI.sub("", f"{done.stdout or ''}\n{done.stderr or ''}").lower()
+        code = done.returncode
     except (OSError, subprocess.SubprocessError, ValueError, TypeError, AttributeError):
         # why: a hung, broken or odd CLI is reported as "unknown", never as a doctor crash.
         return "unknown"
-    # why: "not authenticated" contains "authenticated", so it is checked first.
-    if "not authenticated" in text:
+    # why strict: this line decides whether the wizard offers Firecrawl for monitoring. A substring match took
+    # "Unauthenticated" and "authenticated request failed" for a login; anything unsure stays "unknown".
+    if any(x in text for x in FIRECRAWL_LOGGED_OUT):
         return "not-logged-in"
-    if "authenticated" in text:
+    if code == 0 and FIRECRAWL_OK_LINE.search(text) and not any(x in text for x in FIRECRAWL_CONTRARY):
         return "logged-in"
     return "unknown"
 
