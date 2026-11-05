@@ -85,5 +85,39 @@ class Skills(unittest.TestCase):
         self.assertIn("настрой юриста", install)
 
 
+
+def section(text: str, step: str) -> str:
+    """The questionnaire section whose heading names `step`, up to the next `### ` heading."""
+    m = re.search(rf"^### [^\n]*`{re.escape(step)}`[^\n]*\n(.*?)(?=^### |^## |\Z)", text, flags=re.M | re.S)
+    if not m:
+        raise AssertionError(f"no section for step {step}")
+    return m.group(1)
+
+
+class Reading(unittest.TestCase):
+    def test_reading_section_states_cost_yes_and_no_key(self):
+        text = section(QUESTIONNAIRE, "reading")
+        for needed in ("1,000 credits", "literal", "--scope user", "codex mcp add", "codex mcp login",
+                       "firecrawl login --browser", "doctor.py", "firecrawl.dev/pricing", "skip"):
+            with self.subTest(needed=needed):
+                self.assertIn(needed, text)
+        # why: the key option may only be named as something never to use.
+        for para in text.split("\n\n"):
+            if "--api-key" in para or "view-config" in para:
+                self.assertIn("Never", para)
+
+    def test_numbering_matches_catalog_order(self):
+        numbers = re.findall(r"^\| `[a-z-]+` \| (\d+)\. ", QUESTIONNAIRE, flags=re.M)
+        self.assertEqual([int(n) for n in numbers], list(range(1, len(CATALOG["steps"]) + 1)))
+        self.assertEqual(len(numbers), 11)
+
+    def test_quick_depth_and_watch_heading_follow_the_numbering(self):
+        self.assertIn("steps 1–4", QUESTIONNAIRE)
+        self.assertIn("### 7, 8, 11. `niches`, `laws`, `first-run`", QUESTIONNAIRE)
+
+    def test_setup_skill_names_firecrawl_and_no_key(self):
+        self.assertIn("Firecrawl", frontmatter(TEXTS["setup"])["description"])
+        self.assertIn("Never ask for, read, print or store an API key", TEXTS["setup"])
+
 if __name__ == "__main__":
     unittest.main()

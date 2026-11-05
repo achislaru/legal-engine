@@ -1,6 +1,6 @@
 ---
 name: legal-workflow-setup
-description: Setup wizard of the legal engine (Moldova, Romania, EU). Creates the user's private profile outside the engine and fills it one question at a time - firms, whom they sell to, modules on/off, languages, side and risk threshold, business niches and the laws to keep and monitor (through legal-watch), own samples and contracts, local tools, a first law download. Resumes where it stopped and never overwrites an answer silently. Use for "настрой юриста", "настроить юриста", "configurează juristul", "set up the lawyer", "legal engine setup", and when legal-workflow reports missing setup steps.
+description: Setup wizard of the legal engine (Moldova, Romania, EU). Creates the user's private profile outside the engine and fills it one question at a time - an optional page-reading service (Firecrawl) first, then firms, whom they sell to, modules on/off, languages, side and risk threshold, business niches and the laws to keep and monitor (through legal-watch), own samples and contracts, local tools, a first law download. Resumes where it stopped and never overwrites an answer silently. Use for "настрой юриста", "настроить юриста", "configurează juristul", "set up the lawyer", "legal engine setup", and when legal-workflow reports missing setup steps.
 ---
 
 # Legal Workflow Setup
@@ -22,7 +22,8 @@ Resolve this skill's directory (`<skill-dir>`); the profile script is
   (recommended when it still fits) or replace with the new answer. A copied document never replaces an earlier
   copy (a taken name gets `-02`). Never delete a file or a folder of the profile; never touch `matters/`.
 - **Nothing of the user goes into the engine folder**, the conversation is the only place answers are shown.
-  Never ask for, read or store an API key or a password; a paid service is set up by the user in their own way.
+  Never ask for, read, print or store an API key, a token or a password; a paid service (for example Firecrawl,
+  step `reading`) is connected by the user themselves through its own sign-in.
 - **No legal conclusions here.** The wizard records preferences; any rule of law is checked later, in a matter.
 
 ## Run

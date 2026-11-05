@@ -593,5 +593,30 @@ class Cli(TmpCase):
         self.assertIn("unknown module", err)
 
 
+
+class ReadingStep(TmpCase):
+    """Step `reading` (Firecrawl, optional) is first in the wizard and never a need of any module."""
+
+    def test_reading_is_first_and_not_needed(self):
+        self.assertEqual(list(CATALOG["steps"])[0], "reading")
+        self.assertIsNone(CATALOG["steps"]["reading"])
+        self.assertNotIn("reading", CATALOG["base_needs"])
+        for mid, mod in CATALOG["modules"].items():
+            with self.subTest(module=mid):
+                self.assertNotIn("reading", mod["needs"])
+
+    def test_reading_done_without_file(self):
+        prof = make_profile(self.root)
+        lp.step_set(prof, "reading", "done", CATALOG, note="mcp: on; cli: off", date="2026-11-05")
+        self.assertEqual(lp.read_steps(prof, CATALOG)["reading"], "done")
+
+    def test_pending_reading_does_not_block_ready(self):
+        prof = make_profile(self.root)
+        sib = make_siblings(self.root, "legal-contracts")
+        self.assertEqual(lp.read_steps(prof, CATALOG)["reading"], "pending")
+        out = lp.status(prof, "test", CATALOG, siblings=sib)
+        self.assertTrue(out["ready"])
+        self.assertNotIn("reading", out["missing_steps"])
+
 if __name__ == "__main__":
     unittest.main()

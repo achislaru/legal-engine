@@ -1,6 +1,7 @@
 {
   "schema_version": 1,
   "steps": {
+    "reading": null,
     "firms": "context/company.md",
     "audience": "context/company.md",
     "modules": "modules.json",

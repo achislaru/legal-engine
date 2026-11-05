@@ -65,25 +65,28 @@ step writes are listed once, in `assets/modules.json` (`steps`); the table below
 
 | Step id | Wizard question | File it writes |
 |---|---|---|
-| firms | 1. your firms | `context/company.md` |
-| audience | 2. whom you sell to → suggested modules | `context/company.md` |
-| modules | 3. confirm modules | `modules.json` |
-| language | 4. languages | `context/language.md` |
-| side-risk | 5. side and risk threshold | `context/side-and-risk.md` |
-| niches | 6. business niches and law categories | `laws/watchlist.yaml` |
-| laws | 7. acts to download, frequency, engine | `laws/watchlist.yaml` |
-| documents | 8. own samples and contracts in force | `templates/`, `contracts/` |
-| tools | 9. local tools | — |
-| first-run | 10. first download and trial monitoring | `laws/runs/` |
+| reading | 1. reading official sites (Firecrawl, optional) | — (step note) |
+| firms | 2. your firms | `context/company.md` |
+| audience | 3. whom you sell to → suggested modules | `context/company.md` |
+| modules | 4. confirm modules | `modules.json` |
+| language | 5. languages | `context/language.md` |
+| side-risk | 6. side and risk threshold | `context/side-and-risk.md` |
+| niches | 7. business niches and law categories | `laws/watchlist.yaml` |
+| laws | 8. acts to download, frequency, engine | `laws/watchlist.yaml` |
+| documents | 9. own samples and contracts in force | `templates/`, `contracts/` |
+| tools | 10. local tools | — |
+| first-run | 11. first download and trial monitoring | `laws/runs/` |
 
 Every module needs `firms`, `modules`, `language`, `side-risk` (`base_needs`); a module may need more
-(`legal-watch`: `niches`, `laws`). A step marked `done` whose file is missing counts as `pending`.
+(`legal-watch`: `niches`, `laws`). `reading` is not a base need and no module needs it: skipping it, or leaving it
+`pending`, never blocks a module. A step marked `done` whose file is missing counts as `pending`.
 `legal_profile.py status --module <id>` returns exactly the missing steps.
 
 `skipped` counts as satisfied; then the modules use these defaults:
 
 | Skipped step | Default |
 |---|---|
+| reading | no reading service: the host's web tools, then the user's browser; monitoring engines `urllib,host` |
 | firms | ask for the party in each matter; unknown details go in as `[DE COMPLETAT: …]` |
 | modules | all optional modules off (`status` reports them `off`, not `unset`) |
 | language | the language of the user's message; legal text in the language of the governing law |
