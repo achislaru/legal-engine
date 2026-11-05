@@ -8,8 +8,9 @@ Public repository: an AI lawyer (Moldova, Romania, EU) as Claude Code skills, se
   example.ro are real sites).
 - `python3 tools/check.py` must show **0 FAIL** before every commit (the pre-commit hook runs it). The owner
   keeps a git-ignored `tools/denylist.local.txt` with real names; never commit it, never print it.
-- No keys: the engine works with the host's built-in web tools or a local browser. A paid service is an
-  option the user connects themselves; a skill never reads, asks for or stores a key.
+- No keys: the engine works with the host's built-in web tools, a local browser, or a reading service the user
+  connected themselves (Firecrawl, through its own sign-in: the hosted MCP or the CLI's own login). A skill never
+  reads, asks for, prints or stores a key; skipped, the free route stays.
 - Law is never cached as truth: every conclusion "the rule is in force" is re-checked against the official
   text on the task date. A failed fetch is "not verified", never "no changes".
 - The engine never signs, sends, publishes or files anything; that needs the user.

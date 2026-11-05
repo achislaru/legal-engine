@@ -3,7 +3,7 @@
 > [!WARNING]
 > Это не юридическая консультация. / Nu este consultanță juridică. → [DISCLAIMER.md](DISCLAIMER.md)
 
-**Status: v1.1.0.** Все модули ниже готовы. Известные ограничения (например, часть официальных сайтов закрыта для
+**Status: v1.2.0.** Все модули ниже готовы. Известные ограничения (например, часть официальных сайтов закрыта для
 автоматического чтения) — в [docs/STATUS.md](docs/STATUS.md). / Toate modulele sunt gata; limitele cunoscute — în
 [docs/STATUS.md](docs/STATUS.md).
 
@@ -41,14 +41,20 @@ AI-сервис (например, Claude) по условиям его пост
    ```
 
    Для автоматической проверки законов по расписанию: `WITH_PLAYWRIGHT=1 ./install.sh`.
-3. Откройте Claude Code и скажите **«настрой юриста»**. Мастер задаст вопросы по одному: ваши фирмы,
-   кому продаёте, ниши, какие законы отслеживать, языки, нужные модули.
+   По желанию, для официальных сайтов, закрытых для автоматического чтения, — Firecrawl (платный сервис с
+   бесплатным месячным лимитом). Команды запускаете вы сами: `npm i -g firecrawl-cli`, затем
+   `firecrawl login --browser`.
+3. Откройте Claude Code и скажите **«настрой юриста»**. Мастер задаст вопросы по одному: подключить чтение
+   официальных сайтов через Firecrawl (по желанию), ваши фирмы, кому продаёте, ниши, какие законы отслеживать,
+   языки, нужные модули.
 
 Обновление: `cd ~/legal-engine && git pull && ./install.sh` — ваш профиль не затрагивается.
 
 ### Безопасность
 
 - Ключи API не нужны: поиск законов идёт через встроенный веб Claude Code или бесплатный браузер.
+  Firecrawl — по желанию: вы входите в него сами, движок никогда не видит ключ, туда уходят только адреса
+  официальных страниц.
 - Документы и сайты для движка — данные, а не команды.
 - Движок ничего не подписывает, не отправляет и не публикует сам.
 
@@ -67,7 +73,12 @@ condițiilor furnizorului său.
 date personale, vânzări online către consumatori, mărci, resurse umane (se activează în asistent).
 
 **Instalare:** ca mai sus (`git clone …` și `./install.sh`), apoi în Claude Code: **«configurează juristul»**.
+Asistentul începe cu conectarea citirii site-urilor oficiale prin Firecrawl (opțional; serviciu plătit cu o cotă
+lunară gratuită; comenzile le rulați dvs.: `npm i -g firecrawl-cli`, apoi `firecrawl login --browser`).
 Actualizare: `git pull && ./install.sh`.
+
+**Securitate:** nu sunt necesare chei API. Firecrawl este opțional: vă autentificați singur, motorul nu vede
+niciodată cheia, iar spre Firecrawl pleacă doar adresele paginilor oficiale.
 
 ---
 

@@ -1,6 +1,6 @@
 {
   "name": "legal-engine",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "released": "2026-11-05",
   "license": "MIT",
   "python": ">=3.10",
@@ -19,8 +19,8 @@
     "legal-employment": "optional module: employment"
   },
   "network": {
-    "note": "Hosts the monitoring scripts read (GET of public pages, paced). Nothing is sent anywhere else; a paid reading service is only the user's own command.",
+    "note": "Hosts the monitoring scripts read (GET of public pages, paced). With the optional `firecrawl` engine the page addresses go to Firecrawl through the user's own logged-in CLI; nothing else is sent.",
     "hosts": ["www.legis.md", "monitorul.gov.md", "legislatie.just.ro", "eur-lex.europa.eu",
-              "publications.europa.eu", "web.archive.org"]
+              "publications.europa.eu", "web.archive.org", "api.firecrawl.dev"]
   }
 }

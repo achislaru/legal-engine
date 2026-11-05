@@ -1,5 +1,31 @@
 # Changelog
 
+## 1.2.0 — 2026-11-05
+
+Official sites that refuse plain requests can be read through Firecrawl, a paid service with a free monthly
+allowance that the user connects with its own sign-in. It is optional: skipped, everything works as in 1.1.0.
+
+- **Wizard, first step `reading`:** connect Firecrawl for conversations (the hosted MCP), for monitoring (the CLI),
+  both, or skip; the cost and what is sent (only public official page addresses) are said first. The user runs
+  every sign-in command; the engine never sees a key. The steps after it move by one (documents is step 9).
+- **Engine `firecrawl`** for law monitoring: the user's logged-in CLI, markdown for legis.md and raw HTML for other
+  sites, the page's real HTTP status when Firecrawl reports it, its own 120 s timeout, errors starting with
+  `firecrawl: `, no key.
+  Recommended order `urllib,firecrawl,host`; the credit estimate is in `legal-watch/references/engines.md`.
+- **Anti-bot check on markdown:** a challenge page returned as markdown (by `firecrawl` or `command`) counts as
+  blocked, never as the act.
+- **Schedule PATH:** the weekly job keeps the folders of `firecrawl` and `node`; install it again after installing
+  the CLI or Node.js.
+- **`watch record --via firecrawl`:** a hand check whose page Firecrawl read stays a hand check.
+- **Saved `.md` texts:** version cards and hand checks accept Firecrawl markdown, compared as plain text.
+- **Doctor:** an optional `Firecrawl CLI` line (logged in, not logged in, unknown, absent); it never prints the
+  CLI's output.
+- **Digest and report:** when a site refused reading and Firecrawl was not used, they suggest connecting it.
+- **Reading order in conversation**, the same in every module: Firecrawl tools, then the Firecrawl CLI, then the
+  host's web tools, then the user's browser after their yes. Cookie and tracker screening stays plain GET.
+- Live calibration pending: whether Firecrawl passes the protection of legis.md and legislatie.just.ro is not yet
+  checked on live pages.
+
 ## 1.1.0 — 2026-11-05
 
 Law monitoring learns from its failures, and the law library is described. The whole repository is now under
