@@ -6,6 +6,8 @@
 Prints JSON. Exit 0 = structure passed, 1 = structural errors (listed), 2 = the card cannot be read.
 It never visits a site and never proves the law: it checks that every claim the card makes is recorded the way
 references/version-check.md requires, and, where a saved official text is given, that each quote is really in it.
+A saved text may be plain text, HTML (`.html`/`.htm`, compared as the visible text) or markdown (`.md`, e.g. a page
+read through Firecrawl, compared as plain text: links keep their label, emphasis and table bars are dropped).
 """
 
 from __future__ import annotations
@@ -39,6 +41,7 @@ ARCHIVE_MAX_DAYS = 14
 # why: whether a newer version or change exists can only be seen on the live official page, never in a copy.
 LIVE_ONLY = {"consolidation", "amendments", "status_of_changes"}
 INVISIBLE = dict.fromkeys(map(ord, "\u00ad\u200b\u200c\u200d\u2060\ufeff"))
+_MD_LINK = re.compile(r"!?\[([^\]]*)\]\([^)]*\)")
 
 
 class CardError(ValueError):
@@ -53,11 +56,36 @@ def moment(value: str) -> datetime:
     return stamp
 
 
+def _md_text(text: str) -> str:
+    """Markdown → plain text, step for step as legal-watch's `adapters/common.md_to_text`.
+
+    why duplicated: legal-research must run without legal-watch installed; a test in legal-watch pins the two as
+    equal on live markdown pages, so a quote checked here is checked against the text monitoring hashes.
+    """
+    t = text or ""
+    t = re.sub(r"<br\s*/?>", "\n", t, flags=re.I)
+    t = _MD_LINK.sub(r"\1", t)
+    t = t.replace("\\_", "_")
+    t = re.sub(r"(?m)^\s*#{1,6}\s*", "", t)
+    t = re.sub(r"\*\*|__", "", t)
+    t = re.sub(r"(?<![\w])_(?=\S)|(?<=\S)_(?![\w])", "", t)
+    t = re.sub(r"(?m)^\s*\|?\s*-{3,}\s*(\|\s*-{3,}\s*)*\|?\s*$", "", t)
+    t = re.sub(r"\s*\|\s*", " | ", t)
+    t = re.sub(r"_{3,}", "", t)
+    t = re.sub(r"[ \t]+\n", "\n", t)
+    t = re.sub(r"\n{3,}", "\n\n", t)
+    return t.strip()
+
+
 def plain(text: str, name: str) -> str:
-    """Saved HTML is compared as the text a reader sees: tags dropped, entities decoded."""
-    if name.lower().endswith((".html", ".htm")):
+    """Saved HTML is compared as the text a reader sees: tags dropped, entities decoded; saved markdown (`.md`)
+    as its plain text, so a quote copied from the rendered page is found despite `**`, links and table bars."""
+    lower = name.lower()
+    if lower.endswith((".html", ".htm")):
         text = re.sub(r"<(script|style)\b.*?</\1\s*>", " ", text, flags=re.S | re.I)
         text = html.unescape(re.sub(r"<[^>]+>", "", text))
+    elif lower.endswith(".md"):
+        text = _md_text(text)
     return text
 
 
@@ -265,7 +293,8 @@ def load(path: Path) -> dict:
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("card", type=Path)
-    ap.add_argument("--root", type=Path, help="matter folder; saved texts (text_file) are relative to it")
+    ap.add_argument("--root", type=Path, help="matter folder; saved texts (text_file: .txt, .html or .md) are "
+                                               "relative to it")
     args = ap.parse_args(argv)
     try:
         result = validate(load(args.card), datetime.now().astimezone(), args.root)

@@ -107,6 +107,14 @@ class SavedMarkdown(unittest.TestCase):
             self.assertEqual(manual.saved_text(Path("page.txt")), "**raw** text")
             self.assertEqual(manual.saved_text(Path("page.MD")), "raw text")
 
+    def test_check_version_plain_md_equals_md_to_text(self):
+        checker = manual._checker()
+        self.assertEqual(len(MARKDOWN), 4)
+        for path in MARKDOWN:
+            md = path.read_text(encoding="utf-8")
+            with self.subTest(path=path.name):
+                self.assertEqual(checker.normalise(checker.plain(md, "a.md")), checker.normalise(md_to_text(md)))
+
 
 class CliVia(Base):
     def call(self, *argv):

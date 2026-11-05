@@ -392,5 +392,40 @@ class Cli(unittest.TestCase):
         self.assertEqual(res["structural_status"], "failed")
 
 
+
+class MarkdownText(unittest.TestCase):
+    """A page saved as markdown (e.g. read through Firecrawl) is compared as its plain text."""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.root = Path(self.tmp.name)
+        (self.root / "work" / "sources").mkdir(parents=True)
+        (self.root / "work" / "sources" / "act.md").write_text(
+            "## Art. 5\n\nPrezenta **lege** intră în vigoare la data [publicării](https://official.example.org/mo).\n"
+            "\n| Data | Act |\n|---|---|\n| 01.01.2026 | LP1 |\n", encoding="utf-8")
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def card(self, quote: str) -> dict:
+        card = good_card()
+        card["points"]["consolidation"]["evidence"] = [evidence(text_file="work/sources/act.md", quote=quote)]
+        return card
+
+    def test_quote_of_the_plain_text_passes(self):
+        res = check(self.card("Prezenta lege intră în vigoare la data publicării."), self.root)
+        self.assertEqual(res["errors"], [])
+        self.assertEqual(res["quotes"]["checked"], 1)
+
+    def test_quote_not_in_the_text_still_fails(self):
+        res = check(self.card("Prezenta lege se abrogă la data publicării."), self.root)
+        self.assertTrue(any("quote not found" in e for e in res["errors"]))
+
+    def test_plain_drops_markup_only_for_md(self):
+        md = "**a** [b](https://x.example.org) \\_c\n|---|---|\n| d | e |"
+        self.assertEqual(cv.plain(md, "x.MD"), "a b c | d | e |")
+        self.assertEqual(cv.plain(md, "x.txt"), md)
+
+
 if __name__ == "__main__":
     unittest.main()
