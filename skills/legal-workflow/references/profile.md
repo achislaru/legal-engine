@@ -80,8 +80,9 @@ step writes are listed once, in `assets/modules.json` (`steps`); the table below
 Every module needs `firms`, `modules`, `language`, `side-risk` (`base_needs`); a module may need more
 (`legal-watch`: `niches`, `laws`). `reading` is not a base need and no module needs it: skipping it, or leaving it
 `pending`, never blocks a module. Its note is the user's consent to Firecrawl:
-`conversation: on|off; monitoring: on|off` (`waiting: …` added while pending); Firecrawl is used only when the row is
-`done` with the part `on` (`legal-workflow-setup`, questionnaire step 1). A step marked `done` whose file is missing counts as
+`conversation: on|off; monitoring: on|off`, then `waiting: …` for a part not working yet; Firecrawl is used only when the
+row is `done` with the part `on` (`legal-workflow-setup`, questionnaire step 1), and legal-watch's scripts check it
+themselves (`watch fetch`, adding the `firecrawl` engine, a monitoring run). A step marked `done` whose file is missing counts as
 `pending`.
 `legal_profile.py status --module <id>` returns exactly the missing steps.
 

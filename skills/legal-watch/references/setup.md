@@ -45,7 +45,8 @@ Three questions, in this order:
    - only by hand (`host`).
 
    Without that row the Firecrawl option is offered only as "connect Firecrawl first" (step 1 `reading`,
-   or later through `legal-workflow-update`); it is never put in the engines without that consent.
+   or later through `legal-workflow-update`); it is never put in the engines without that consent (`watch init`
+   refuses it: `legal_watch: Firecrawl is not allowed for monitoring: …`).
 
 Then: `watch init --niches … --categories … --acts all|p1|<ids> [--b2c] --countries … --language <digest language
 from context/language.md> --engines … [--fetch-command …] --schedule … --force` (`--force` replaces the watchlist
@@ -56,8 +57,9 @@ of step 7; the state and the stored texts are kept), then `step set laws --statu
 1. `watch run` (the first run records every act's baseline and stores its official text).
 2. Read the digest with the user: how many acts were read, which stayed "not verified" and why. Offer to check the
    p1 ones by hand now (monitoring.md, "Host check": Firecrawl when the user allowed it for conversations, else the
-   web tools, else the user's browser); the user may postpone. With `firecrawl` among the engines, say how many credits the run used (about one
-   per act read through it, [engines.md](engines.md)).
+   web tools, else the user's browser); the user may postpone. With `firecrawl` among the engines, give the digest's line `Firecrawl calls this run: N
+   (estimated credits: about N; …)`: an estimate, the bill is only in the user's Firecrawl account
+   ([engines.md](engines.md)).
 3. If contracts in force were copied into `contracts/` (step 9), build their indexes now ([contracts.md](contracts.md)).
 4. Schedule: if the user chose weekly local runs, show `watch schedule plan` and, after their yes,
    `watch schedule install` (macOS) or give the cron line ([engines.md](engines.md)). The job keeps the `PATH` of

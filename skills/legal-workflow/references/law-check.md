@@ -75,10 +75,12 @@ an interpretation; even a green result needs the agent's own reading.
    legis.md and monitorul.gov.md also the CLI through the engine's reader,
    `<engine>/.venv/bin/python <legal-workflow>/../legal-watch/scripts/legal_watch.py fetch --url <url> --out
    <matter>/work/sources/<act>-<date>.md` (`.html` for monitorul.gov.md). Never run `firecrawl` itself: the
-   reader keeps the CLI's own output out of the chat and saves only an accepted page. Exit 0 prints
-   `{url, via, status, format, saved, sha256}` (`sha256` names the saved file; it is not the text hash that
-   monitoring keeps); exit 2 means "not verified", with a fixed `error` and nothing saved. Each Firecrawl page
-   costs the user one credit, and it may not get through.
+   reader keeps the CLI's own output out of the chat and saves only an accepted page (status 2xx). Exit 0 prints
+   `{url, via, status, format, saved, sha256}`: `saved` is the version card's `text_file` and `sha256` its
+   `text_sha256`. Exit 2 with a JSON `error` (fixed text, for example `firecrawl: HTTP 302 (reported by Firecrawl,
+   not a page)`) means "not verified", nothing saved. Exit 2 with `legal_watch: Firecrawl is not allowed for
+   conversations: …` means the row does not allow it: nothing was sent. Each Firecrawl page costs the user one
+   credit, and it may not get through.
 2. Else the host's web tools.
 3. Else the user's own browser after their yes (a local browser the user installed counts, or the user pastes
    the text).
