@@ -53,11 +53,11 @@ verified".
 
 For each act left not verified that the user wants closed now:
 
-1. Open the official page (from the catalog's `official_url` or the act's source) in this order: the Firecrawl
-   tools if they are connected in this session (no cache: `maxAge` 0); else the Firecrawl CLI if `tools/doctor.py`
-   shows it logged in (`firecrawl scrape <url> --format markdown --max-age 0 -o <folder>/<act>-<date>.md`); else
-   the host's web tools; else the user's own browser after their yes. Each Firecrawl page costs the user one
-   credit; only the public official URL goes to it. A page that is still an anti-bot check stays "not verified".
+1. Open the official page (from the catalog's `official_url` or the act's source) in the reading order of
+   `<legal-workflow>/references/law-check.md`: Firecrawl only when the user allowed it for conversations (for
+   legis.md and monitorul.gov.md through `watch fetch --url <url> --out <folder>/<act>-<date>.md`, `.html` for
+   monitorul.gov.md), else the host's web tools, else the user's browser after their yes. A page that is still an
+   anti-bot check stays "not verified".
    Live run of 2026-11-05: the web tools were refused too (legis.md 403, legislatie.just.ro dropped the connection); the user's browser opened legis.md, while
    legislatie.just.ro did not open even in a browser that day. A site that does not open leaves the act "not
    verified", never "no changes".

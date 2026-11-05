@@ -29,16 +29,23 @@ Three questions, in this order:
    jurisdiction and its official source (watchlist format below).
 2. **How often.** Weekly on this computer (recommended: Monday morning, local job) · only when I ask · a weekly
    Claude scheduled task. See [engines.md](engines.md) for what each needs.
-3. **How to read the sites.** Run `python3 <engine>/tools/doctor.py` first. If its `Firecrawl CLI` line is `OK`
-   (logged in): free reading first, then Firecrawl where a site refuses, then a check by hand (recommended:
-   `urllib,firecrawl,host`; say the credit estimate of [engines.md](engines.md)). Otherwise: free automatic reading
-   with a check by hand of what the sites block (recommended: `urllib,host`), or connect Firecrawl (step 1
-   `reading`) · plus a local browser (`urllib,playwright,host`; installs Playwright) · plus the user's own
-   command for a paid reading service (`command`; the user writes the command, the engine never sees a key) ·
-   only by hand (`host`). Say plainly that several official portals block automatic reading: with the free
-   engines most Moldovan and Romanian acts end "not verified" and are checked by hand (the agent opens the official
-   page in a conversation), and a run stays "incomplete" while a main (`p1`) act is not checked. EU acts are read
-   automatically.
+3. **How to read the sites.** Run `python3 <engine>/tools/doctor.py` first. Say plainly that several official
+   portals block automatic reading: with the free engines most Moldovan and Romanian acts end "not verified" and
+   are checked by hand (the agent opens the official page in a conversation), and a run stays "incomplete" while a
+   main (`p1`) act is not checked. EU acts are read automatically, free. Options, as a list, the recommended one
+   first:
+   - with Firecrawl (`urllib,firecrawl,host`; recommended only when the `reading` row of
+     `context/integration-status.md` is `done` with `monitoring: on` and the doctor's `Firecrawl CLI` line is
+     `OK`): free reading first, then Firecrawl on legis.md and monitorul.gov.md where they refuse (it may get
+     through, no guarantee), then a check by hand; say the credit estimate of [engines.md](engines.md);
+   - free reading and a check by hand of what the sites block (`urllib,host`; recommended otherwise);
+   - plus a local browser (`urllib,playwright,host`; installs Playwright);
+   - plus the user's own command for a paid reading service (`command`; the user writes the command, the engine
+     never sees a key);
+   - only by hand (`host`).
+
+   Without that row the Firecrawl option is offered only as "connect Firecrawl first" (step 1 `reading`,
+   or later through `legal-workflow-update`); it is never put in the engines without that consent.
 
 Then: `watch init --niches … --categories … --acts all|p1|<ids> [--b2c] --countries … --language <digest language
 from context/language.md> --engines … [--fetch-command …] --schedule … --force` (`--force` replaces the watchlist
@@ -48,8 +55,8 @@ of step 7; the state and the stored texts are kept), then `step set laws --statu
 
 1. `watch run` (the first run records every act's baseline and stores its official text).
 2. Read the digest with the user: how many acts were read, which stayed "not verified" and why. Offer to check the
-   p1 ones by hand now (monitoring.md, "Host check", which uses the user's browser when the sites refuse the web
-   tools); the user may postpone. With `firecrawl` among the engines, say how many credits the run used (about one
+   p1 ones by hand now (monitoring.md, "Host check": Firecrawl when the user allowed it for conversations, else the
+   web tools, else the user's browser); the user may postpone. With `firecrawl` among the engines, say how many credits the run used (about one
    per act read through it, [engines.md](engines.md)).
 3. If contracts in force were copied into `contracts/` (step 9), build their indexes now ([contracts.md](contracts.md)).
 4. Schedule: if the user chose weekly local runs, show `watch schedule plan` and, after their yes,

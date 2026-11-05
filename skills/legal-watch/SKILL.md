@@ -42,7 +42,8 @@ document tools are `<skill-dir>/../legal-contracts/` (`<legal-contracts>`). Scri
 1. **Run** — `watch run` (all acts, or `--acts p1` / ids). Exit 0 OK, 1 changes, 2 incomplete or bad input,
    3 unexpected error.
 2. **Close the gaps** — every act listed "not verified" is checked by hand when the user wants it now:
-   open the official page through Firecrawl if connected, else the host's web tools, else the user's browser, fill a
+   open the official page in the reading order of `<legal-workflow>/references/law-check.md` (Firecrawl only when
+   the user allowed it for conversations), fill a
    version card (`<legal-research>/references/version-check.md`, `scope: "text"` is enough for monitoring), save the
    text read, then `watch record --card <card> --root <folder of the card> [--via firecrawl]`. Never write "no changes" for an act that was
    not read today.
