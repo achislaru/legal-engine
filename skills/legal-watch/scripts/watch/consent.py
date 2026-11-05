@@ -6,8 +6,8 @@ note: `fetch` needs `conversation: on`, adding the `firecrawl` engine and a moni
 `legal-workflow/references/profile.md`); its note grammar is `conversation: on|off; monitoring: on|off`, optionally
 followed by `waiting: <what>`.
 
-Only a `done` row counts. No file, no row (a profile from 1.1), a `pending` or `skipped` row, a part that is not
-`on`, or a file that cannot be read all mean "not allowed": the scripts fail closed, never open.
+Only a single `done` row counts. No file, no row (a profile from 1.1), more than one `reading` row, a `pending` or
+`skipped` row, a part that is not `on`, or a file that cannot be read all mean "not allowed": the scripts fail closed, never open.
 """
 from __future__ import annotations
 
@@ -40,17 +40,16 @@ def reading(profile: Path) -> dict[str, bool]:
         lines = path.read_text(encoding="utf-8").splitlines() if path.is_file() else []
     except (OSError, UnicodeDecodeError):   # why: an unreadable file is no consent, never a crash of the run
         return allowed
-    for line in lines:
-        if not line.lstrip().startswith("|"):
-            continue
-        cells = _cells(line)
-        if cells[0] != STEP:
-            continue
-        # the last matching row wins, as when the wizard rewrites it; only `done` is consent
-        state = cells[1].lower() if len(cells) > 1 else ""
-        parts = note_parts(cells[3]) if len(cells) > 3 else {}
-        allowed = {p: state == "done" and parts.get(p) == "on" for p in PARTS}
-    return allowed
+    rows = [_cells(line) for line in lines if line.lstrip().startswith("|")]
+    rows = [cells for cells in rows if cells[0] == STEP]
+    # why exactly one: with two rows (a hand edit, an old writer) it is unclear which one is the user's current
+    # answer, and picking one could keep Firecrawl on after a withdrawal. The wizard's next write leaves one row.
+    if len(rows) != 1:
+        return allowed
+    cells = rows[0]
+    state = cells[1].lower() if len(cells) > 1 else ""   # only `done` is consent
+    parts = note_parts(cells[3]) if len(cells) > 3 else {}
+    return {p: state == "done" and parts.get(p) == "on" for p in PARTS}
 
 
 def allowed(profile: Path, part: str) -> bool:

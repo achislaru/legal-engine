@@ -132,5 +132,56 @@ class _One:
         return self.res
 
 
+class DuplicateReadingRows(Tmp):
+    def test_reader_fails_closed_on_duplicates(self):
+        none = {"conversation": False, "monitoring": False}
+        for rows in ((ON, ON), (ON, OFF), (OFF, ON)):
+            with self.subTest(rows=rows):
+                self.status(*rows)
+                self.assertEqual(consent.reading(self.profile), none)
+        self.status(ON)
+        self.assertEqual(consent.reading(self.profile), {"conversation": True, "monitoring": True})
+
+    def test_writer_leaves_one_row_and_withdrawal_takes_effect(self):
+        catalog = lp.load_catalog()
+        for rows in ((ON, ON), (ON, OFF), (OFF, ON)):
+            with self.subTest(rows=rows):
+                self.status("| firms | done | 2026-11-04 | |", *rows, "| language | done | 2026-11-04 | |")
+                lp.step_set(self.profile, "reading", "skipped", catalog, note="not connected", date="2026-11-05")
+                text = (self.profile / "context" / "integration-status.md").read_text(encoding="utf-8")
+                self.assertEqual(text.count("| reading |"), 1)
+                self.assertIn("| reading | skipped | 2026-11-05 | not connected |", text)
+                self.assertIn("| firms |", text)
+                self.assertIn("| language |", text)
+                self.assertEqual(consent.reading(self.profile), {"conversation": False, "monitoring": False})
+                # fetch is refused before anything is sent
+                with mock.patch.object(cli, "FirecrawlFetcher") as cls:
+                    code, out, err = self.call("fetch", "--url", LEGIS, "--out", str(self.dir / "a.md"))
+                self.assertEqual(code, 2)
+                self.assertIn("not allowed for conversations", err)
+                cls.assert_not_called()
+
+    def test_run_skips_firecrawl_after_withdrawal(self):
+        catalog = lp.load_catalog()
+        self.status(ON)
+        _, niches = lib.load_catalog()
+        code, _, err = self.call("init", "--niches", next(iter(niches["niches"])), "--acts", "none", "--add",
+                                 "eu.reg.2016-679", "--engines", "urllib,firecrawl,host", "--force")
+        self.assertEqual(code, 0, err)
+        self.status(ON, ON)
+        lp.step_set(self.profile, "reading", "skipped", catalog, note="not connected", date="2026-11-05")
+        captured = {}
+
+        def fake_run(*a, **kw):
+            captured.update(kw)
+            return {"summary": {"checked": 0, "acts": 0, "unverified_p1": 0, "changes": 0}, "result": "OK",
+                    "date": "2026-11-05", "exit_code": 0}
+        with mock.patch.object(cli.runner, "run", fake_run), \
+                mock.patch.object(cli, "build_chain", return_value=_One(None)) as chain:
+            self.call("run", "--today", "2026-11-05", "--dry-run")
+        self.assertEqual(chain.call_args.args[0], ["urllib"])
+        self.assertEqual(captured["notes"], [runner.NOTE_FIRECRAWL_NOT_ALLOWED])
+
+
 if __name__ == "__main__":
     unittest.main()

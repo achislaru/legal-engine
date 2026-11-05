@@ -199,6 +199,20 @@ class StepSet(TmpCase):
         self.assertIn("| firms | pending | 2026-11-05 | redo \\| later |", text)
         self.assertEqual(lp.read_steps(prof, CATALOG)["language"], "skipped")
 
+    def test_duplicate_rows_of_the_step_become_one(self):
+        on = "| reading | done | 2026-11-04 | conversation: on; monitoring: on |"
+        off = "| reading | skipped | 2026-11-04 | not connected |"
+        for rows in ((on, on), (on, off), (off, on)):
+            with self.subTest(rows=rows):
+                table = STATUS_TABLE + "\n".join(rows) + "\n| tools | done | 2026-11-04 | |\n"
+                prof = make_profile(Path(tempfile.mkdtemp(dir=self.root)), status=table)
+                lp.step_set(prof, "reading", "done", CATALOG, "conversation: on; monitoring: off", "2026-11-05")
+                lines = (prof / "context" / "integration-status.md").read_text(encoding="utf-8").splitlines()
+                mine = [x for x in lines if x.startswith("| reading |")]
+                self.assertEqual(mine, ["| reading | done | 2026-11-05 | conversation: on; monitoring: off |"])
+                self.assertLess(lines.index(mine[0]), lines.index("| tools | done | 2026-11-04 | |"))
+                self.assertEqual(lp.read_steps(prof, CATALOG)["firms"], "done")
+
     def test_appends_table_to_a_file_without_one(self):
         prof = make_profile(self.root, status="# Integration status\n\nfree text\n")
         lp.step_set(prof, "tools", "done", CATALOG)

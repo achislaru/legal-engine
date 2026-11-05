@@ -328,7 +328,7 @@ def read_steps(profile: Path, catalog: dict) -> dict[str, str]:
 
 
 def step_set(profile: Path, step: str, state: str, catalog: dict, note: str = "", date: str | None = None) -> dict:
-    """Write one step row (replace it if present). Only the wizard and the update skill call this."""
+    """Write one step row (replace it and drop its duplicates). Only the wizard and the update skill call this."""
     if step not in catalog["steps"]:
         raise StatusFileError(f"unknown step {step!r}; steps: {', '.join(catalog['steps'])}")
     state = state.lower()  # why: the reader accepts any case, so the writer does too
@@ -343,10 +343,12 @@ def step_set(profile: Path, step: str, state: str, catalog: dict, note: str = ""
     day = _date(date, StatusFileError)
     row = f"| {step} | {state} | {day} | {_cell(note)} |"
     lines = _status_lines(profile) or ["# Integration status", ""]
-    for i, raw in enumerate(lines):
-        if _row_cells(raw)[0] == step and raw.lstrip().startswith("|"):
-            lines[i] = row
-            break
+    mine = [i for i, raw in enumerate(lines) if raw.lstrip().startswith("|") and _row_cells(raw)[0] == step]
+    if mine:
+        # why all of them: the file is user-editable; a duplicate row left behind could keep an old answer alive
+        # (the Firecrawl consent reader refuses duplicates). The new row takes the first one's place.
+        lines[mine[0]] = row
+        lines = [raw for i, raw in enumerate(lines) if i not in mine[1:]]
     else:
         if not any(raw.lstrip().startswith("| Step |") for raw in lines):
             lines += STATUS_HEADER.rstrip("\n").split("\n")
