@@ -6,6 +6,10 @@ opens it with its own web tools or the user's browser and fills a version card o
 into an `AdapterResult` of adapter `host` and merges it into today's run: the same comparison with the held
 baseline, the same state, digest and contract flags as an automatic reading. A card that is not from today, fails
 the checker or is `not_verified` changes nothing.
+
+`via` names the tool the agent read the page with: `host` (its own web tools or the browser) or `firecrawl` (the
+Firecrawl CLI, for a site that refuses the script engines). Either way it stays a check by hand (adapter `host`):
+the agent read the page and filled the card, so it resolves amendments and Gazette signals the same way.
 """
 from __future__ import annotations
 
@@ -15,12 +19,14 @@ from pathlib import Path
 
 from . import library as lib
 from . import runner
+from .adapters.common import md_to_text
 from .contract import AdapterResult, Evidence, Redaction, classify, parse_date, text_sha256
 
 CHECKER = lib.SKILL.parent / "legal-research" / "scripts" / "check_version.py"
 # The points of a `scope: "text"` card (version-check.md): all must be closed from a live official page before a
 # hand check can count. The checker accepts an `outdated` card with open points; monitoring may not.
 REQUIRED_POINTS = ("consolidation", "amendments", "deferred_entry", "repeal", "status_of_changes")
+VIA = ("host", "firecrawl")
 
 
 def open_points(card: dict) -> list[str]:
@@ -39,6 +45,17 @@ def _consolidation_evidence(card: dict) -> list[dict]:
             if isinstance(e, dict)]
 
 
+def saved_text(path: Path) -> str:
+    """The text of a saved official page, as the evidence hash and the snapshot need it.
+
+    A `.md` file becomes the same plain text the legis_md markdown reader hashes (`md_to_text`), so a page saved
+    through Firecrawl gives the same evidence hash and snapshot as a scripted reading of that page; anything else
+    is kept as it is.
+    """
+    raw = Path(path).read_text(encoding="utf-8", errors="replace")
+    return md_to_text(raw) if Path(path).suffix.lower() == ".md" else raw
+
+
 def _checker():
     if not CHECKER.exists():
         raise lib.WatchError(f"legal-research is not installed next to legal-watch ({CHECKER} missing)")
@@ -48,7 +65,8 @@ def _checker():
     return mod
 
 
-def card_to_result(act: dict, card: dict, today: _dt.date, text: str | None = None) -> AdapterResult:
+def card_to_result(act: dict, card: dict, today: _dt.date, text: str | None = None, *,
+                   via: str = "host") -> AdapterResult:
     """A version card that passed the checker → the monitoring result for the act."""
     if (card.get("act") or {}).get("id") != act["id"]:
         raise lib.WatchError(f"the card is for {(card.get('act') or {}).get('id')!r}, not {act['id']}")
@@ -82,19 +100,22 @@ def card_to_result(act: dict, card: dict, today: _dt.date, text: str | None = No
     sha = text_sha256(text) if text else None
     evidence = Evidence(url=ev0.get("url") or (card.get("act") or {}).get("official_record_url") or "",
                         fetched_at=card.get("checked_at") or "", sha256=sha, parser="version-card",
-                        parser_calibrated=True, via="host")
+                        parser_calibrated=True, via=via)
     status, cur, nxt, err, notes = classify(act=act, parsed=parsed, today=today, repealed=gone,
                                             repealed_label=f"repealed by {rep.get('by')}" if gone else None)
     if status == "unchanged" and not sha:
         # The contract needs a hash for "unchanged": the agent saves the text it read (text_file + text_sha256).
         status, err = "parse_failed", "no saved text of the reading: give text_file in the card and --root"
-    notes = ["checked by hand from a version card"] + notes
+    note = "checked by hand from a version card" + (" (page read through Firecrawl)" if via == "firecrawl" else "")
+    notes = [note] + notes
     return AdapterResult(act_id=act["id"], adapter="host", status=status, current=cur, next=nxt,
                          evidence=evidence, error=err, notes=notes).validate()
 
 
 def record(profile: Path, acts: list[dict], card_path: Path, today: _dt.date, *, root: Path | None = None,
-           language: str = "en", schedule: str | None = None) -> dict:
+           language: str = "en", schedule: str | None = None, via: str = "host") -> dict:
+    if via not in VIA:
+        raise lib.WatchError(f"--via must be one of {', '.join(VIA)}")
     checker = _checker()
     card = checker.load(Path(card_path))
     check = checker.validate(card, _dt.datetime.now().astimezone(), root)
@@ -118,8 +139,8 @@ def record(profile: Path, acts: list[dict], card_path: Path, today: _dt.date, *,
     text_file = next((e["text_file"] for e in _consolidation_evidence(card) if e.get("text_file")), None)
     text = None
     if text_file and root is not None and (Path(root) / text_file).is_file():
-        text = (Path(root) / text_file).read_text(encoding="utf-8", errors="replace")
-    res = card_to_result(act, card, today, text).to_dict()
+        text = saved_text(Path(root) / text_file)
+    res = card_to_result(act, card, today, text, via=via).to_dict()
     r = runner.classify_record({"act_id": act["id"], "title": act.get("title"),
                                 "jurisdiction": act.get("jurisdiction"), "priority": act.get("priority"),
                                 **res, "reasons": []}, repeal_held=bool(act.get("repealed")))

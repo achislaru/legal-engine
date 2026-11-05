@@ -169,15 +169,19 @@ def update_state(state: dict, r: dict, day: str, snapshot: str | None) -> None:
     ev = r.get("evidence") or {}
     held.update({"sha256": ev.get("sha256"), "url": ev.get("url"), "via": ev.get("via"),
                  "checked_on": day, "snapshot": snapshot or held.get("snapshot")})
-    # why: the list of amending acts and corrigenda is the baseline for spotting a new one. A check by hand
-    # resolves the ones the reader listed today; a reader without such a list (not Cellar) keeps the old one.
-    if ev.get("via") == "host":
+    # why: `evidence.via` names the tool that read the page (host or firecrawl), `adapter` "host" means the act was
+    # checked by hand from a version card; only the latter resolves amendments and Gazette signals. A record
+    # written before `--via` existed carries `via` "host" without the adapter, so that still counts as by hand.
+    by_hand = r.get("adapter") == "host" or ev.get("via") == "host"
+    # The list of amending acts and corrigenda is the baseline for spotting a new one. A check by hand resolves
+    # the ones the reader listed today; a reader without such a list (not Cellar) keeps the old one.
+    if by_hand:
         if r.get("related_reviewed") is not None:
             held["related"] = sorted(set(held.get("related") or []) | set(r["related_reviewed"]))
     elif r.get("related") is not None:
         held["related"] = r["related"]
     # A checked reading (a new version, or a check by hand) answers the Gazette's signals for this act.
-    if r["status"] in CHANGE_KIND or ev.get("via") == "host":
+    if r["status"] in CHANGE_KIND or by_hand:
         state.setdefault("signals", {}).pop(r["act_id"], None)
 
 

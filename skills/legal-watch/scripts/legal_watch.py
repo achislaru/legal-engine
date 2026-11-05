@@ -12,7 +12,7 @@
     legal_watch.py source add <act> (--doc-id ID | --celex CELEX) [--kind legis_md|just_ro|eurlex]
     legal_watch.py prune --runs-older DAYS [--apply]   list (or, with --apply, delete) old run folders
     legal_watch.py run [--acts all|p1|id,…] [--today YYYY-MM-DD] [--dry-run] [--no-gazette]
-    legal_watch.py record --card <version-card.json> [--root <matter>]
+    legal_watch.py record --card <version-card.json> [--root <matter>] [--via host|firecrawl]
     legal_watch.py digest [--date YYYY-MM-DD]
     legal_watch.py index scan <contract> --jurisdiction MD|RO [--write] [--force]
     legal_watch.py index check | pending
@@ -239,7 +239,7 @@ def cmd_record(a) -> int:
     profile = resolve_profile(a.profile)
     wl, acts = _watch(profile)
     out = manual.record(profile, acts, Path(a.card), dt.date.today(), root=Path(a.root) if a.root else None,
-                        language=wl["settings"]["language"], schedule=wl["settings"]["schedule"])
+                        language=wl["settings"]["language"], schedule=wl["settings"]["schedule"], via=a.via)
     rec = next(x for x in out["acts"] if x["act_id"] == json.loads(Path(a.card).read_text())["act"]["id"])
     _print({"act": rec["act_id"], "status": rec["status"], "checked": rec["checked"], "result": out["result"]})
     return 0
@@ -341,6 +341,8 @@ def parser() -> argparse.ArgumentParser:
     rc = sub.add_parser("record")
     rc.add_argument("--card", required=True)
     rc.add_argument("--root")
+    # why: a page the agent read through Firecrawl is still a check by hand; the flag only records the tool
+    rc.add_argument("--via", default="host", choices=manual.VIA)
     d = sub.add_parser("digest")
     d.add_argument("--date")
     x = sub.add_parser("index")
