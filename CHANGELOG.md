@@ -10,18 +10,22 @@ works as in 1.1.0.
   (the CLI), both, later or skip; the cost and what is sent (only public official page addresses) are said first,
   and the chosen option is the user's yes. The user signs up and runs every sign-in command; the engine never sees
   a key. The note `conversation: on|off; monitoring: on|off` is the consent: Firecrawl is used only where it says
-  `on` (a skipped, pending or 1.1 profile never uses it, even with an MCP server connected). The steps after it
+  `on` (a skipped, pending or 1.1 profile never uses it, even with an MCP server connected), and the scripts check
+  it themselves: `watch fetch` needs `conversation: on`; adding the engine needs `monitoring: on`; a run without it
+  skips Firecrawl and says so. One part may work while the other waits (`off; waiting: …`). The steps after it
   move by one (documents is step 9).
 - **Engine `firecrawl`** for law monitoring, only on legis.md (markdown) and monitorul.gov.md (raw HTML): other
   sites are skipped with no call and no credit, so EU acts stay free through Cellar and legislatie.just.ro waits
-  for its reader to be calibrated. The user's logged-in CLI, the page's real HTTP status (without it the page is
-  not verified), only the requested format, its own 120 s timeout, fixed errors starting with `firecrawl: `
+  for its reader to be calibrated. The user's logged-in CLI, the page's real HTTP status (without it, or with a
+  status other than 2xx, the page is not verified), only the requested format, metadata read inside the fixed
+  errors (nothing of the CLI's output reaches the chat or the run files), its own 120 s timeout, fixed errors starting with `firecrawl: `
   (not logged in, out of credits and CLI not found are said once per run), no key.
-  Recommended order `urllib,firecrawl,host`; the credit estimate is in `legal-watch/references/engines.md`.
+  Recommended order `urllib,firecrawl,host`; the credit estimate (acts and Gazette pages) is in
+  `legal-watch/references/engines.md`, and the digest gives each run's Firecrawl calls as an estimate, not the bill.
 - **`watch fetch --url … --out …`:** the safe way to read legis.md or monitorul.gov.md through the CLI in a
   conversation; the CLI's own output never reaches the chat, only an accepted page is saved.
-- **`watch engines set …`:** connect or disconnect Firecrawl for monitoring later; acts, state and texts are kept
-  (`legal-workflow-update`).
+- **`watch engines add|remove <engine>`** (and `engines set …`): connect or disconnect Firecrawl for monitoring
+  later, keeping the other engines; acts, state and texts are kept (`legal-workflow-update`).
 - **Anti-bot check on markdown:** a challenge page returned as markdown (by `firecrawl` or `command`) counts as
   blocked, never as the act.
 - **Schedule PATH:** the weekly job keeps the folders of `firecrawl` and `node`; install it again after installing
