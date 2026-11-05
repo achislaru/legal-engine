@@ -607,7 +607,7 @@ class ReadingStep(TmpCase):
 
     def test_reading_done_without_file(self):
         prof = make_profile(self.root)
-        lp.step_set(prof, "reading", "done", CATALOG, note="mcp: on; cli: off", date="2026-11-05")
+        lp.step_set(prof, "reading", "done", CATALOG, note="conversation: on; monitoring: off", date="2026-11-05")
         self.assertEqual(lp.read_steps(prof, CATALOG)["reading"], "done")
 
     def test_pending_reading_does_not_block_ready(self):
