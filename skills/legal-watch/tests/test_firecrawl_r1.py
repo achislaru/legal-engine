@@ -148,5 +148,19 @@ class ArgvErrorCaught(unittest.TestCase):
         self.assertEqual(run.calls, [])
 
 
+class SnapshotIsTheHashedText(unittest.TestCase):
+    """D5/K3: the snapshot of a markdown page is the text the reader hashed, so its name matches evidence.sha256."""
+
+    def test_markdown_page_snapshot_is_md_to_text(self):
+        md = "# Lege\n\n**Articolul 1.** [Text](https://www.legis.md/x) of the act.\n"
+        rec = runner.RecordingFetcher(None)
+        rec.pages[LEGIS] = F.page_result(LEGIS, "", via="firecrawl", markdown=md)
+        text = runner.official_text(LEGIS, rec, None)
+        self.assertEqual(text, md_to_text(md))
+        self.assertEqual(text_sha256(text), text_sha256(md_to_text(md)))
+        rec.pages[GAZETTE] = F.page_result(GAZETTE, HTML, via="urllib")
+        self.assertIn("Articolul 1", runner.official_text(GAZETTE, rec, None))
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -27,6 +27,7 @@ from . import issues as _issues
 from . import library as lib
 from . import report as _report
 from .adapters import adapter_for, cellar, monitorul_md
+from .adapters.common import page_text
 from .contract import (FETCH_FAILED, NEW_FUTURE, NEW_IN_FORCE, PARSE_FAILED, REPEALED, SCAN_COMPLETE, UNCHANGED,
                        AdapterResult, ContractError)
 from .fetchers import FetchResult, _Paced, now_iso
@@ -88,7 +89,9 @@ def official_text(url: str, rec: RecordingFetcher, cellar_get) -> str | None:
     # why: pop, not get: a run of many acts must not keep every page it read in memory
     page = rec.pages.pop(url, None)
     if page is not None:
-        return page.text or page.markdown
+        # why page_text: a markdown page is hashed as md_to_text(markdown), so the snapshot must be that text too
+        # (its raw markdown would not match evidence.sha256 nor a hand check of the same page saved as .md)
+        return page_text(page)
     body = getattr(cellar_get, "pages", {}).pop(url, None)
     # why: the same plain text the adapter hashed, so the snapshot name matches evidence.sha256
     return cellar.page_text(body)[1] if body is not None else None
