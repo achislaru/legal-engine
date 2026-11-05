@@ -140,7 +140,9 @@ def page_result(url: str, html: str, *, status: int | None = 200, via: str, fina
     """
     text = html_to_text(html) if html else markdown
     title = title if title is not None else _title(html)
-    reason = detect_challenge(status, title, html, text)
+    # A markdown-only page (firecrawl, a `command` engine) is checked on its markdown: with an empty HTML body a
+    # "Just a moment..." challenge page used to pass as content.
+    reason = detect_challenge(status, title, html or markdown, text)
     return FetchResult(url=url, status=status, final_url=final_url or url, title=title, html=html, text=text,
                        fetched_at=fetched_at or now_iso(), blocked=reason is not None, blocked_reason=reason,
                        via=via, markdown=markdown)
@@ -493,7 +495,7 @@ def fixture_result(url: str, html: str, *, status: int = 200, title: str | None 
         res.title = title
     if text is not None:
         res.text = text
-    reason = detect_challenge(status, res.title, html, res.text)
+    reason = detect_challenge(status, res.title, html or markdown, res.text)
     res.blocked, res.blocked_reason = reason is not None, reason
     return res
 

@@ -159,6 +159,20 @@ class Get(unittest.TestCase):
         self.assertFalse(res.blocked)
         self.assertEqual(res.error, "HTTP 404 (reported by Firecrawl)")
 
+    def test_markdown_challenge_is_blocked(self):
+        challenge = "# Just a moment...\n\nEfectuarea verificării de securitate\n"
+        f, _ = fetcher(proc(payload("markdown", challenge, statusCode=200)))
+        res = f.get(LEGIS)
+        self.assertTrue(res.blocked)
+        self.assertIn("just a moment", res.blocked_reason)
+        self.assertIsNone(res.error)
+        # the same page through a user `command` engine
+        cmd = F.CommandFetcher("fetch {url}", run=lambda *a, **kw: proc(challenge), pause_range=(0, 0))
+        self.assertTrue(cmd.get(LEGIS).blocked)
+        # and in saved fixtures
+        self.assertTrue(F.fixture_result(LEGIS, "", markdown=challenge).blocked)
+        self.assertFalse(F.fixture_result(LEGIS, "", markdown=MD).blocked)
+
     def test_exit_codes_map_to_fixed_messages(self):
         cases = {
             f"Error: Insufficient credits {MARKER}": "firecrawl: out of credits (plan limit reached)",
