@@ -27,8 +27,9 @@ P = {
         "copies": "Text copies", "solved_on": "Solved", "how": "How", "detail": "Detail",
         "note": "This page lives only on your computer. \"Not verified\" never means \"no changes\".",
         "fix": {
-            "blocked": ("open the official page in your browser and record a version card",
-                        "nothing; if asked, allow the agent to use your browser"),
+            "blocked": ("read the official page with Firecrawl if connected, else in your browser, and record a "
+                        "version card",
+                        "connect Firecrawl (setup step `reading`), or allow the agent your browser"),
             "fetch_failed": ("try again next run; after 3 failures check the page by hand",
                              "nothing, unless the site is down for long"),
             "parse_failed": ("check the act by hand; if it repeats, save the page as a sample for the engine",
@@ -54,8 +55,10 @@ P = {
         "copies": "Copii ale textului", "solved_on": "Rezolvat", "how": "Cum", "detail": "Detalii",
         "note": "Pagina există doar pe calculatorul dvs. „Neverificat” nu înseamnă niciodată „fără modificări”.",
         "fix": {
-            "blocked": ("deschide pagina oficială în browserul dvs. și înregistrează fișa redacției",
-                        "nimic; la cerere, permiteți agentului să folosească browserul"),
+            "blocked": ("citește pagina oficială prin Firecrawl, dacă e conectat, altfel în browserul dvs., și "
+                        "înregistrează fișa redacției",
+                        "conectați Firecrawl (pasul de configurare `reading`) sau permiteți agentului să folosească "
+                        "browserul dvs."),
             "fetch_failed": ("reîncearcă la următoarea rulare; după 3 eșecuri verifică manual",
                              "nimic, dacă site-ul nu e căzut mult timp"),
             "parse_failed": ("verifică actul manual; dacă se repetă, salvează pagina ca model pentru motor",
@@ -80,8 +83,9 @@ P = {
         "detail": "Подробности",
         "note": "Эта страница есть только на вашем компьютере. «Не проверено» никогда не значит «без изменений».",
         "fix": {
-            "blocked": ("откроет официальную страницу в вашем браузере и запишет карточку редакции",
-                        "ничего; по просьбе разрешите агенту ваш браузер"),
+            "blocked": ("прочитает официальную страницу через Firecrawl, если он подключён, иначе в вашем браузере, "
+                        "и запишет карточку редакции",
+                        "подключите Firecrawl (шаг настройки `reading`) или разрешите агенту ваш браузер"),
             "fetch_failed": ("повторит в следующий прогон; после 3 неудач проверит вручную",
                              "ничего, если сайт не лежит долго"),
             "parse_failed": ("проверит акт вручную; если повторяется — сохранит страницу как образец для движка",
@@ -170,6 +174,8 @@ def render(profile: Path, language: str = "en", today: _dt.date | None = None) -
                        f"<td>{e(i.get('first_seen'))}</td><td>{e(i.get('count'))}</td>"
                        f"<td>{e(agent)}</td><td>{e(you)}</td></tr>")
         out.append("</table>")
+    if _digest.needs_firecrawl_tip(run):
+        out.append(f"<p>{e(d['firecrawl_tip'])}</p>")
 
     sites = _issues.site_issues(log)
     if sites:

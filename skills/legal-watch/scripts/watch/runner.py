@@ -279,13 +279,19 @@ def merge_day(profile: Path, out: dict) -> dict:
     out["contracts_to_review"] = day.get("contracts_to_review") or []
     if out.get("monitorul") is None:
         out["monitorul"] = day.get("monitorul")
+    if "engines" not in out:   # a hand record reads nothing itself: the day's engines still describe the run
+        out["engines"] = day.get("engines")
     return out
 
 
 def run(profile: Path, acts: list[dict], fetcher, today: _dt.date, *, selector: str = "all",
         dry_run: bool = False, language: str = "en", schedule: str | None = None, scan_gazette: bool = True,
-        direct_http: bool = True, mode: str = "live") -> dict:
-    """`direct_http`: the user allowed plain HTTP (engine urllib), so Cellar may be read as EUR-Lex fallback."""
+        direct_http: bool = True, mode: str = "live", engines: list[str] | None = None) -> dict:
+    """`direct_http`: the user allowed plain HTTP (engine urllib), so Cellar may be read as EUR-Lex fallback.
+
+    `engines`: the script engines of the run (host excluded), kept in run.json so the digest and the report know
+    whether Firecrawl was tried before suggesting it.
+    """
     day = today.isoformat()
     state = lib.load_state(profile)
     state.setdefault("signals", {})
@@ -330,7 +336,7 @@ def run(profile: Path, acts: list[dict], fetcher, today: _dt.date, *, selector: 
 
     out = {"schema_version": 1, "date": day, "generated_at": now_iso(), "mode": mode, "dry_run": dry_run,
            "selector": selector, "full": selector == "all", "language": language, "schedule": schedule,
-           "acts": records, "monitorul": mon, "engine_attempts": rec.attempts}
+           "acts": records, "monitorul": mon, "engine_attempts": rec.attempts, "engines": list(engines or [])}
     if not dry_run:
         out = merge_day(profile, out)
     return finish(profile, out, state, dry_run=dry_run, flag_ids={a["id"] for a in chosen},

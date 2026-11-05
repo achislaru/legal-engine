@@ -1,4 +1,4 @@
-"""A check by hand through Firecrawl and saved markdown texts (no network)."""
+"""A check by hand through Firecrawl, saved markdown texts, the engines of a run and the Firecrawl tip (no network)."""
 
 from __future__ import annotations
 
@@ -16,8 +16,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import legal_watch as cli  # noqa: E402
 from test_adapters_legis_md import T_MD, live_act, md_page  # noqa: E402
 from test_review_fixes import TODAY, Base, live_card  # noqa: E402
-from test_runner import URL, V2, act, adapter  # noqa: E402
-from watch import issues, library as lib, manual, runner  # noqa: E402
+from test_runner import URL, V2, Pages, act, adapter  # noqa: E402
+from watch import digest, issues, library as lib, manual, report, runner  # noqa: E402
 from watch.adapters import legis_md  # noqa: E402
 from watch.adapters.common import md_to_text  # noqa: E402
 from watch.contract import UNCHANGED, AdapterResult, Evidence, classify, text_sha256  # noqa: E402
@@ -116,6 +116,69 @@ class SavedMarkdown(unittest.TestCase):
                 self.assertEqual(checker.normalise(checker.plain(md, "a.md")), checker.normalise(md_to_text(md)))
 
 
+class RunEngines(Base):
+    def test_run_json_records_engines_and_merge_keeps_them(self):
+        self.run_with([act()], adapter([V2]), engines=["urllib", "firecrawl"])
+        day = self.profile / "laws" / "runs" / TODAY.isoformat() / "run.json"
+        self.assertEqual(json.loads(day.read_text())["engines"], ["urllib", "firecrawl"])
+        held = act(current={"label": "v2", "in_force_from": "2026-10-01"})
+        manual.record(self.profile, [held], live_card(self.matter, "ro.lege.1-2020"), TODAY, root=self.matter,
+                      via="firecrawl")
+        self.assertEqual(json.loads(day.read_text())["engines"], ["urllib", "firecrawl"])
+
+    def test_run_without_engines_records_an_empty_list(self):
+        out = self.run_with([act()], adapter([V2]), dry_run=True)
+        self.assertEqual(out["engines"], [])
+
+    def test_record_alone_has_no_engines(self):
+        out = manual.record(self.profile, [act()], live_card(self.matter, "ro.lege.1-2020"), TODAY, root=self.matter)
+        self.assertNotIn("engines", out)   # nothing of the day to inherit; the tip then treats it as no Firecrawl
+
+
+class FirecrawlTip(Base):
+    def blocked_run(self, engines, fail="blocked_403", **kw):
+        return self.run_with([act()], adapter([], fail=fail), engines=engines, **kw)
+
+    def test_digest_tip_shown_only_without_firecrawl_and_with_refusals(self):
+        cases = [
+            (self.blocked_run(["urllib"], dry_run=True), True),                       # refused, no Firecrawl
+            (self.blocked_run(["urllib", "firecrawl"], dry_run=True), False),         # Firecrawl already tried
+            (self.blocked_run(["urllib"], fail="parse_failed", dry_run=True), False),  # no refusal
+            ({**self.blocked_run(None, fail="fetch_failed", dry_run=True), "engines": None}, True),  # old run.json
+        ]
+        for run, shown in cases:
+            self.assertEqual(digest.needs_firecrawl_tip(run), shown, run.get("engines"))
+            for lang in ("en", "ro", "ru"):
+                with self.subTest(engines=run.get("engines"), lang=lang):
+                    self.assertEqual(digest.T[lang]["firecrawl_tip"] in digest.render(run, lang), shown)
+        self.assertFalse(digest.needs_firecrawl_tip(None))
+        clean = self.run_with([act()], adapter([V2]), engines=["urllib"], dry_run=True)
+        self.assertNotIn("Firecrawl", digest.render(clean, "en"))
+
+    def test_tip_texts(self):
+        self.assertIn("Firecrawl", digest.T["en"]["firecrawl_tip"])
+        self.assertIn("citirea automată", digest.T["ro"]["firecrawl_tip"])
+        self.assertIn("автоматическом чтении", digest.T["ru"]["firecrawl_tip"])
+        for lang in ("ro",):   # Romanian with comma-below letters, never the old cedilla ones
+            self.assertFalse(set("şţŞŢ") & set(digest.T[lang]["firecrawl_tip"] + "".join(report.P[lang]["fix"]["blocked"])))
+
+    def test_report_tip_and_blocked_fix_text(self):
+        self.blocked_run(["urllib"])
+        for lang in ("en", "ro", "ru"):
+            with self.subTest(lang=lang):
+                page = report.render(self.profile, lang, TODAY)
+                self.assertIn(f"<p>{report.e(digest.T[lang]['firecrawl_tip'])}</p>", page)
+                for text in report.P[lang]["fix"]["blocked"]:
+                    self.assertIn("Firecrawl", text)
+                    self.assertIn(report.e(text), page)
+
+    def test_report_without_tip_when_firecrawl_was_used(self):
+        self.blocked_run(["urllib", "firecrawl"])
+        page = report.render(self.profile, "en", TODAY)
+        self.assertNotIn(report.e(digest.T["en"]["firecrawl_tip"]), page)
+        self.assertIn(report.e(report.P["en"]["fix"]["blocked"][0]), page)   # the fix still names Firecrawl
+
+
 class CliVia(Base):
     def call(self, *argv):
         out, err = io.StringIO(), io.StringIO()
@@ -140,7 +203,20 @@ class CliVia(Base):
             cli.main(["--profile", str(self.profile), "record", "--card", str(card), "--via", "browser"])
         self.assertEqual(cm.exception.code, 2)
 
+    def test_cli_run_passes_script_engines(self):
+        with mock.patch.object(cli.runner, "run", return_value={"summary": {"checked": 0, "acts": 0,
+                                                                            "unverified_p1": 0, "changes": 0},
+                                                                "result": "OK", "date": TODAY.isoformat(),
+                                                                "exit_code": 0}) as run, \
+                mock.patch.object(cli, "build_chain", return_value=Pages()):
+            _, niches = lib.load_catalog()
+            self.call("init", "--niches", next(iter(niches["niches"])), "--acts", "none", "--add", "eu.reg.2016-679",
+                      "--engines", "urllib,firecrawl,host")
+            self.assertEqual(self.call("run", "--today", TODAY.isoformat())[0], 0)
+        self.assertEqual(run.call_args.kwargs["engines"], ["urllib", "firecrawl"])
+
     def test_usage_names_firecrawl_and_via(self):
+        self.assertIn("command,firecrawl,host", cli.__doc__)
         self.assertIn("[--via host|firecrawl]", cli.__doc__)
 
 

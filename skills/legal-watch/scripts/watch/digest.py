@@ -34,7 +34,10 @@ T = {
         "byhand": "Ask me to check these by hand (the agent opens the official page and records a version card).",
         "baselines": "First reading recorded (baseline)", "signals": "Official Gazette (MD): issues mentioning watched acts",
         "health": "Last run with every main act checked", "overdue": "overdue: the scheduled run has not completed for {d} days",
-        "never": "none yet", "nochanges": "No changes in the acts checked."},
+        "never": "none yet", "nochanges": "No changes in the acts checked.",
+        "firecrawl_tip": ("Sites refused automatic reading. Connecting Firecrawl (the wizard's first step `reading`, "
+                          "or ask to change it later) lets the scripts read them; it is a paid service with a free "
+                          "monthly allowance, and you sign in yourself.")},
     "ro": {
         "title": "Monitorizarea legislației", "result": {"OK": "fără modificări", "CHANGES": "modificări găsite",
                                                          "INCOMPLETE": "incomplet: nu toate actele principale au fost verificate",
@@ -60,7 +63,11 @@ T = {
         "baselines": "Prima citire înregistrată (punct de referință)",
         "signals": "Monitorul Oficial (MD): numere care menționează acte urmărite",
         "health": "Ultima rulare cu toate actele principale verificate", "overdue": "întârziere: rularea programată nu s-a încheiat de {d} zile",
-        "never": "încă niciuna", "nochanges": "Nicio modificare în actele verificate."},
+        "never": "încă niciuna", "nochanges": "Nicio modificare în actele verificate.",
+        "firecrawl_tip": ("Unele site-uri au refuzat citirea automată. Conectarea Firecrawl (primul pas al "
+                          "asistentului, `reading`, sau cereți schimbarea mai târziu) le permite scripturilor să le "
+                          "citească; este un serviciu plătit cu o cotă lunară gratuită, iar autentificarea o faceți "
+                          "dvs.")},
     "ru": {
         "title": "Мониторинг законов", "result": {"OK": "без изменений", "CHANGES": "есть изменения",
                                                   "INCOMPLETE": "неполно: проверены не все главные акты",
@@ -86,7 +93,10 @@ T = {
         "baselines": "Первое чтение записано (исходная редакция)",
         "signals": "Monitorul Oficial (MD): номера, где упомянуты отслеживаемые акты",
         "health": "Последний прогон, где проверены все главные акты", "overdue": "просрочено: плановый прогон не завершался {d} дн.",
-        "never": "ещё не было", "nochanges": "В проверенных актах изменений нет."},
+        "never": "ещё не было", "nochanges": "В проверенных актах изменений нет.",
+        "firecrawl_tip": ("Сайты отказали в автоматическом чтении. Подключение Firecrawl (первый шаг мастера "
+                          "`reading` или попросите изменить позже) позволит скриптам их читать; это платный сервис "
+                          "с бесплатным месячным лимитом, вход вы делаете сами.")},
 }
 
 
@@ -101,6 +111,18 @@ def health(state: dict, today: _dt.date, schedule: str | None) -> dict:
     earlier = [r for r in runs if r.get("date") != today.isoformat()]   # the first run is never "overdue"
     overdue = limit is not None and (days is None or days > limit) and bool(earlier)
     return {"last_complete": last, "days_since": days, "overdue": overdue}
+
+
+# Reasons a script engine could not read the page; Firecrawl reads many such sites (anti-bot pages, dropped
+# connections). Other reasons (no source, uncalibrated reader, Gazette signal) are not helped by another engine.
+REFUSALS = ("blocked_403", "fetch_failed")
+
+
+def needs_firecrawl_tip(run: dict | None) -> bool:
+    """Suggest Firecrawl only when it was not among the run's engines and a site refused the scripts."""
+    if not run or "firecrawl" in (run.get("engines") or []):
+        return False
+    return any(set(u.get("reasons") or []) & set(REFUSALS) for u in run.get("unverified") or [])
 
 
 def _name(x: dict) -> str:
@@ -137,7 +159,10 @@ def render(run: dict, language: str = "en") -> str:
         for u in run["unverified"]:
             why = "; ".join(t["why"].get(r, r) for r in u["reasons"])
             lines.append(f"- {_name(u)} [{u.get('priority')}]: {why}")
-        lines += ["", t["byhand"], t["page"], ""]
+        lines += ["", t["byhand"], t["page"]]
+        if needs_firecrawl_tip(run):
+            lines.append(t["firecrawl_tip"])
+        lines.append("")
     baselines = [r for r in run.get("acts") or [] if r["status"] == "baseline"]
     if baselines:
         lines += [f"## {t['baselines']}", ""]

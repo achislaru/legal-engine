@@ -4,7 +4,7 @@
     legal_watch.py catalog [niches|categories|acts] [--countries MD,RO,EU]
     legal_watch.py suggest --niches a,b [--b2c] [--countries MD,RO,EU]
     legal_watch.py init --niches a,b --categories c,d [--acts p1|all|id,…] [--add id,…] [--b2c]
-                        [--countries …] [--language ru|ro|en] [--engines urllib,playwright,command,host]
+                        [--countries …] [--language ru|ro|en] [--engines urllib,playwright,command,firecrawl,host]
                         [--fetch-command CMD] [--schedule on-request|weekly|claude-schedule] [--force]
     legal_watch.py show
     legal_watch.py issues [--all]           the error log (open problems; --all with solved and per-site engines)
@@ -227,7 +227,7 @@ def cmd_run(a) -> int:
             fetcher = HostOnly()
         out = runner.run(profile, acts, fetcher, today, selector=a.acts, dry_run=a.dry_run,
                          language=s["language"], schedule=s["schedule"], scan_gazette=not a.no_gazette and bool(engines),
-                         direct_http="urllib" in engines, mode="live" if engines else "host")
+                         direct_http="urllib" in engines, mode="live" if engines else "host", engines=engines)
     sm = out["summary"]
     print(f"{out['result']} · checked {sm['checked']}/{sm['acts']} · not verified (p1): {sm['unverified_p1']} · "
           f"changes: {sm['changes']} · {lib.laws_dir(profile) / 'runs' / out['date'] / 'digest.md'}"
