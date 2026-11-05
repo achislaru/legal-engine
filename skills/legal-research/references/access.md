@@ -6,14 +6,8 @@ were observed in autumn 2026. Before writing "unavailable", try again and record
 
 Never get around a CAPTCHA, a "verifying your browser" page or any other access barrier. Such a page is not the
 text of the act: the point is `not_verified`, the work goes on with a working conclusion (`version-check.md`).
-Read an official page in this order: the Firecrawl tools if they are connected in this session (scrape the
-official URL, no cache: `maxAge` 0); else the Firecrawl CLI if `tools/doctor.py` shows it logged in
-(`firecrawl scrape <url> --format markdown --max-age 0 -o <matter>/work/sources/<act>-<date>.md`); else the host's
-web tools; else the user's own browser after their yes. Each Firecrawl page costs the user one credit. Only public
-official URLs go to Firecrawl, never document text or personal data. A page that is still an anti-bot check stays
-"not verified". Firecrawl reads public pages; a page it returns as a challenge is not the act. A local
-browser the user installed (for example Playwright with the system Chrome) also counts as the user's browser, or the
-user opens the page and pastes the text. Firecrawl is connected by the user through its own sign-in; this skill
+The order of reading (Firecrawl only when the user allowed it for conversations, then the host's web tools, then
+the user's browser) is in `<legal-workflow>/references/law-check.md`, "When a source is unavailable"; this skill
 never reads, asks for, prints or stores a key.
 
 ## Moldova

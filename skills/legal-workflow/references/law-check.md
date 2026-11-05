@@ -66,10 +66,25 @@ an interpretation; even a green result needs the agent's own reading.
 
 ## When a source is unavailable
 
-Read an official page in this order: the Firecrawl tools if they are connected in this session (scrape the
-official URL, no cache: `maxAge` 0); else the Firecrawl CLI if `tools/doctor.py` shows it logged in
-(`firecrawl scrape <url> --format markdown --max-age 0 -o <matter>/work/sources/<act>-<date>.md`); else the host's
-web tools; else the user's own browser after their yes. Each Firecrawl page costs the user one credit. Only public
+**Reading order** (the one rule; the other skills link here). Read an official page in this order:
+
+1. **Firecrawl, only if the user allowed it for conversations:** the `reading` row of
+   `<profile>/context/integration-status.md` is `done` and its note contains `conversation: on`. A skipped or
+   pending row, `conversation: off`, no row (a profile from 1.1) → not used, even when Firecrawl tools are
+   connected. Allowed: the Firecrawl tools in this session (scrape the official URL, no cache: `maxAge` 0); for
+   legis.md and monitorul.gov.md also the CLI through the engine's reader,
+   `<engine>/.venv/bin/python <legal-workflow>/../legal-watch/scripts/legal_watch.py fetch --url <url> --out
+   <matter>/work/sources/<act>-<date>.md` (`.html` for monitorul.gov.md). Never run `firecrawl` itself: the
+   reader keeps the CLI's own output out of the chat and saves only an accepted page. Exit 0 prints
+   `{url, via, status, format, saved, sha256}` (`sha256` names the saved file; it is not the text hash that
+   monitoring keeps); exit 2 means "not verified", with a fixed `error` and nothing saved. Each Firecrawl page
+   costs the user one credit, and it may not get through.
+2. Else the host's web tools.
+3. Else the user's own browser after their yes (a local browser the user installed counts, or the user pastes
+   the text).
+
+Firecrawl comes first here because the user is waiting for one answer and allowed the credit; monitoring puts
+the free engines first because every run repeats every act (`legal-watch/references/engines.md`). Only public
 official URLs go to Firecrawl, never document text or personal data. A page that is still an anti-bot check stays
 "not verified". (On 2026-11-05 legis.md answered 403 and legislatie.just.ro dropped
 the host's web tools.) After a failure try the direct record or official PDF, another allowed way of reading, or
