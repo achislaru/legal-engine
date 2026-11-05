@@ -59,6 +59,15 @@ def payload(fmt: str, content: str, **meta) -> str:
     return json.dumps({fmt: content, "metadata": meta})
 
 
+def allow(profile: Path, note: str = "conversation: on; monitoring: on", status: str = "done") -> Path:
+    """Write the `reading` row of the profile as the wizard does: the consent the scripts check."""
+    path = Path(profile) / "context" / "integration-status.md"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text("# Integration status\n\n| Step | Status | Updated | Note |\n|---|---|---|---|\n"
+                    f"| reading | {status} | 2026-11-05 | {note} |\n", encoding="utf-8")
+    return path
+
+
 class Lists(unittest.TestCase):
     def test_engine_lists_include_firecrawl(self):
         self.assertEqual(F.ENGINES, ("urllib", "playwright", "command", "firecrawl"))

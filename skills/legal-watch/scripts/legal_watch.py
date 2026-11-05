@@ -14,11 +14,13 @@
     legal_watch.py run [--acts all|p1|id,…] [--today YYYY-MM-DD] [--dry-run] [--no-gazette]
     legal_watch.py record --card <version-card.json> [--root <matter>] [--via host|firecrawl]
     legal_watch.py fetch --url <url> --out <file> [--engine firecrawl]
-                        read one official page through the Firecrawl CLI for a conversation: saves only an
-                        accepted page (.md for legis.md, .html for monitorul.gov.md), prints a short JSON; exit 0
-                        saved, 2 not verified (the CLI's own output is never shown)
-    legal_watch.py engines set <engine,…>   change only settings.engines (e.g. urllib,firecrawl,host to connect
-                        Firecrawl, urllib,host to disconnect); acts, state and texts are kept
+                        read one official page through the Firecrawl CLI for a conversation (needs the setup step
+                        `reading` done with `conversation: on`): saves only an accepted page (.md for legis.md,
+                        .html for monitorul.gov.md), prints a short JSON; exit 0 saved, 2 not verified or not
+                        allowed (the CLI's own output is never shown)
+    legal_watch.py engines add|remove <engine>   add or remove one engine (e.g. firecrawl), keeping the others and
+                        their order; idempotent; adding firecrawl needs `monitoring: on` in the step `reading`
+    legal_watch.py engines set <engine,…>   replace the whole list; acts, state and texts are kept
     legal_watch.py digest [--date YYYY-MM-DD]
     legal_watch.py index scan <contract> --jurisdiction MD|RO [--write] [--force]
     legal_watch.py index check | pending
@@ -43,9 +45,9 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 import shutil  # noqa: E402
 
-from watch import clauses, issues, library as lib, manual, report, runner, schedule  # noqa: E402
-from watch.fetchers import (BrowserBusy, FetchConfigError, FirecrawlFetcher, HostOnly, build_chain,  # noqa: E402
-                            firecrawl_format, firecrawl_skip_error)
+from watch import clauses, consent, issues, library as lib, manual, report, runner, schedule  # noqa: E402
+from watch.fetchers import (FC_UNREADABLE, BrowserBusy, FetchConfigError, FirecrawlFetcher, HostOnly,  # noqa: E402
+                            build_chain, firecrawl_format, firecrawl_skip_error)
 
 WORKFLOW_SCRIPTS = lib.SKILL.parent / "legal-workflow" / "scripts"
 
@@ -63,6 +65,22 @@ def resolve_profile(raw: str | None) -> Path:
         raise lib.WatchError("legal-workflow is not installed next to legal-watch; pass --profile") from e
     except Exception as e:  # noqa: BLE001 — the profile script raises its own typed errors
         raise lib.WatchError(f"cannot find the profile: {e}") from e
+
+
+class ConsentError(lib.WatchError):
+    """Firecrawl (a paid service) would be used where the user did not allow it in the setup step `reading`."""
+
+
+NO_CONVERSATION = ("Firecrawl is not allowed for conversations: the setup step `reading` must be done with "
+                   "`conversation: on` (legal-workflow-update connects it); nothing was sent")
+NO_MONITORING = ("Firecrawl is not allowed for monitoring: the setup step `reading` must be done with "
+                 "`monitoring: on` (legal-workflow-update connects it); the engines were not changed")
+
+
+def require_monitoring_consent(profile: Path, engines: list[str]) -> None:
+    """why in code: a watchlist with `firecrawl` makes every scheduled run spend credits, so it needs the yes."""
+    if "firecrawl" in engines and not consent.allowed(profile, "monitoring"):
+        raise ConsentError(NO_MONITORING)
 
 
 def _csv(s: str | None) -> list[str]:
@@ -129,6 +147,7 @@ def cmd_init(a) -> int:
                          "fetch_command": a.fetch_command, "schedule": a.schedule},
             "niches": _csv(a.niches), "categories": chosen_cats, "acts": [{"id": i} for i in ids]}
     lib.validate_watchlist(json.loads(json.dumps(data)))
+    require_monitoring_consent(profile, data["settings"]["engines"])
     lib.write_atomic(path, lib.dump_watchlist(data))
     _print({"watchlist": str(path), "acts": len(ids), "categories": chosen_cats})
     return 0
@@ -226,6 +245,12 @@ def cmd_run(a) -> int:
     s = wl["settings"]
     today = dt.date.fromisoformat(a.today) if a.today else dt.date.today()
     engines = [e for e in s["engines"] if e != "host"]
+    notes = []
+    if "firecrawl" in engines and not consent.allowed(profile, "monitoring"):
+        # why: consent withdrawn after the watchlist was set (a scheduled job keeps running): no credit is spent
+        # without the yes; the run says so instead of failing, and the free engines still read
+        engines = [e for e in engines if e != "firecrawl"]
+        notes.append(runner.NOTE_FIRECRAWL_NOT_ALLOWED)
     with contextlib.ExitStack() as stack:
         if engines:
             # why: an engine a site kept refusing in recent runs goes last there (error log, issues.py)
@@ -236,11 +261,13 @@ def cmd_run(a) -> int:
             fetcher = HostOnly()
         out = runner.run(profile, acts, fetcher, today, selector=a.acts, dry_run=a.dry_run,
                          language=s["language"], schedule=s["schedule"], scan_gazette=not a.no_gazette and bool(engines),
-                         direct_http="urllib" in engines, mode="live" if engines else "host", engines=engines)
+                         direct_http="urllib" in engines, mode="live" if engines else "host", engines=engines,
+                         notes=notes)
     sm = out["summary"]
     print(f"{out['result']} · checked {sm['checked']}/{sm['acts']} · not verified (p1): {sm['unverified_p1']} · "
           f"changes: {sm['changes']} · {lib.laws_dir(profile) / 'runs' / out['date'] / 'digest.md'}"
-          + ("" if a.dry_run else f" · {report.path(profile)}"))
+          + ("" if a.dry_run else f" · {report.path(profile)}")
+          + (" · firecrawl skipped: not allowed for monitoring" if notes else ""))
     return out["exit_code"]
 
 
@@ -266,6 +293,9 @@ def cmd_fetch(a) -> int:
     same FirecrawlFetcher as monitoring runs it: argv only, temp folder, timeout, the allowlist, the anti-bot check,
     fixed errors. Only an accepted page is written; nothing of the CLI's own output is printed.
     """
+    # why first: without the user's yes for conversations nothing may be sent, not even to check the site
+    if not consent.allowed(resolve_profile(a.profile), "conversation"):
+        raise ConsentError(NO_CONVERSATION)
     fmt = firecrawl_format(a.url)
     if fmt is None:
         _print({"url": a.url, "via": "firecrawl", "status": None, "error": firecrawl_skip_error(), "saved": None})
@@ -274,8 +304,13 @@ def cmd_fetch(a) -> int:
     if out.suffix.lower() not in FETCH_SUFFIXES[fmt]:
         raise lib.WatchError(f"--out must end in {' or '.join(FETCH_SUFFIXES[fmt])} for a {fmt} page of this site")
     lib.refuse_engine(out)   # why: an official text saved for a matter belongs to the user's profile, never here
-    res = FirecrawlFetcher(pause_range=(0, 0)).get(a.url)
-    ok = not res.error and not res.blocked and res.status is not None and res.status < 400
+    try:
+        res = FirecrawlFetcher(pause_range=(0, 0)).get(a.url)
+    except Exception:  # noqa: BLE001 — why: an exception may quote CLI data; main() would print it with exit 3
+        _print({"url": a.url, "via": "firecrawl", "status": None, "error": FC_UNREADABLE, "saved": None})
+        return 2
+    # only a 2xx page is today's text (the fetcher already marks other statuses as errors; checked twice on purpose)
+    ok = not res.error and not res.blocked and res.status is not None and 200 <= res.status < 300
     if not ok:
         _print({"url": a.url, "via": "firecrawl", "status": res.status,
                 "error": res.error or res.blocked_reason or f"HTTP {res.status}", "saved": None})
@@ -288,19 +323,42 @@ def cmd_fetch(a) -> int:
 
 
 def cmd_engines(a) -> int:
-    """Change only `settings.engines` (connect or disconnect Firecrawl later); acts, state and texts stay."""
+    """Change only `settings.engines` (connect or disconnect Firecrawl later); acts, state and texts stay.
+
+    `add`/`remove` touch one engine and keep the rest (why: a user's playwright or own command must survive a
+    Firecrawl change); `set` replaces the list.
+    """
     profile = resolve_profile(a.profile)
     path = lib.laws_dir(profile) / "watchlist.yaml"
     wl = lib.load_watchlist(path)
-    engines = _csv(a.engines)
-    if len(set(engines)) != len(engines):
-        raise lib.WatchError(f"an engine is named twice in {','.join(engines)}")
+    current = list(wl["settings"]["engines"])
+    if a.op == "set":
+        engines = _csv(a.engines)
+        if len(set(engines)) != len(engines):
+            raise lib.WatchError(f"an engine is named twice in {','.join(engines)}")
+    else:
+        name = a.engines.strip()
+        if name not in lib.ENGINES:
+            raise lib.WatchError(f"unknown engine {name!r}; allowed: {', '.join(lib.ENGINES)}")
+        if a.op == "remove":
+            engines = [e for e in current if e != name]
+        elif name in current:
+            engines = current
+        else:
+            # before `host`: host is the hand check after every script engine, so a script engine never goes after it
+            at = current.index("host") if "host" in current else len(current)
+            engines = current[:at] + [name] + current[at:]
+    if "firecrawl" in engines and "firecrawl" not in current:
+        require_monitoring_consent(profile, engines)
+    if engines == current and a.op != "set":
+        _print({"engines": engines, "changed": False})
+        return 0
     data = {"schema_version": wl["schema_version"], "settings": {**wl["settings"], "engines": engines},
             "niches": wl["niches"], "categories": wl["categories"], "acts": wl["acts"]}
     lib.validate_watchlist(json.loads(json.dumps(data)))
     lib.write_atomic(path, lib.dump_watchlist(data))
     # why the hint: a launchd job keeps the PATH of its install; after installing the CLI it must be installed again
-    _print({"engines": engines, "next": "if a weekly job is installed, run `legal_watch.py schedule install` again "
+    _print({"engines": engines, "changed": engines != current, "next": "if a weekly job is installed, run `legal_watch.py schedule install` again "
                                         "(cron: `schedule plan --kind cron`) so it gets the current PATH"})
     return 0
 
@@ -408,7 +466,7 @@ def parser() -> argparse.ArgumentParser:
     fe.add_argument("--out", required=True)
     fe.add_argument("--engine", default="firecrawl", choices=("firecrawl",))
     en = sub.add_parser("engines")
-    en.add_argument("op", choices=("set",))
+    en.add_argument("op", choices=("set", "add", "remove"))
     en.add_argument("engines")
     d = sub.add_parser("digest")
     d.add_argument("--date")

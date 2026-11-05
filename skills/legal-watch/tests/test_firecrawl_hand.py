@@ -15,6 +15,7 @@ sys.path.insert(0, str(SKILL / "scripts"))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import legal_watch as cli  # noqa: E402
 from test_adapters_legis_md import T_MD, live_act, md_page  # noqa: E402
+from test_firecrawl import allow  # noqa: E402
 from test_review_fixes import TODAY, Base, live_card  # noqa: E402
 from test_runner import URL, V2, Pages, act, adapter  # noqa: E402
 from watch import digest, issues, library as lib, manual, report, runner  # noqa: E402
@@ -222,6 +223,7 @@ class CliVia(Base):
         return code, out.getvalue(), err.getvalue()
 
     def test_cli_record_via_flag_and_init_accepts_firecrawl(self):
+        allow(self.profile)   # the init of a firecrawl engine needs `monitoring: on`
         _, niches = lib.load_catalog()
         code, out, err = self.call("init", "--niches", next(iter(niches["niches"])), "--acts", "none",
                                    "--add", "eu.reg.2016-679", "--engines", "urllib,firecrawl,host")
@@ -239,6 +241,7 @@ class CliVia(Base):
         self.assertEqual(cm.exception.code, 2)
 
     def test_cli_run_passes_script_engines(self):
+        allow(self.profile)
         with mock.patch.object(cli.runner, "run", return_value={"summary": {"checked": 0, "acts": 0,
                                                                             "unverified_p1": 0, "changes": 0},
                                                                 "result": "OK", "date": TODAY.isoformat(),

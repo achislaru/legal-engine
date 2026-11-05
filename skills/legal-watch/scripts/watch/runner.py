@@ -38,6 +38,8 @@ VERIFIABLE = (UNCHANGED, NEW_IN_FORCE, NEW_FUTURE, REPEALED, BASELINE, REPEAL_KN
 CHANGE_KIND = {NEW_IN_FORCE: "in_force", NEW_FUTURE: "future", REPEALED: "repealed"}
 EXIT = {"OK": 0, "CHANGES": 1, "INCOMPLETE": 2}
 HOST_ONLY_ERROR = "engine 'host' only"
+# Run notes (codes; the digest words them in the user's language).
+NOTE_FIRECRAWL_NOT_ALLOWED = "firecrawl_not_allowed"   # in the engines, but the `reading` note lost `monitoring: on`
 
 
 class RecordingFetcher:
@@ -117,8 +119,9 @@ def check_one(act: dict, fetcher, today: _dt.date, *, cellar_get=None) -> dict:
                             error=f"adapter broke the result contract: {e}").to_dict()
         return {**base, **res, "reasons": ["adapter_crashed"]}
     except Exception as e:  # noqa: BLE001 — a crashed adapter is "not verified", never silence
+        # why the type only: the message may quote page or CLI data (a URL from Firecrawl's metadata)
         res = AdapterResult(act_id=act["id"], adapter=name, status=FETCH_FAILED,
-                            error=f"adapter crashed: {type(e).__name__}: {str(e)[:200]}").to_dict()
+                            error=f"adapter crashed: {type(e).__name__}").to_dict()
         return {**base, **res, "reasons": ["adapter_crashed"]}
     return {**base, **res, "reasons": []}
 
@@ -289,11 +292,12 @@ def merge_day(profile: Path, out: dict) -> dict:
 
 def run(profile: Path, acts: list[dict], fetcher, today: _dt.date, *, selector: str = "all",
         dry_run: bool = False, language: str = "en", schedule: str | None = None, scan_gazette: bool = True,
-        direct_http: bool = True, mode: str = "live", engines: list[str] | None = None) -> dict:
+        direct_http: bool = True, mode: str = "live", engines: list[str] | None = None,
+        notes: list[str] | None = None) -> dict:
     """`direct_http`: the user allowed plain HTTP (engine urllib), so Cellar may be read as EUR-Lex fallback.
 
     `engines`: the script engines of the run (host excluded), kept in run.json so the digest and the report know
-    whether Firecrawl was tried before suggesting it.
+    whether Firecrawl was tried before suggesting it. `notes`: run note codes (`NOTE_…`) for the digest.
     """
     day = today.isoformat()
     state = lib.load_state(profile)
@@ -312,7 +316,7 @@ def run(profile: Path, acts: list[dict], fetcher, today: _dt.date, *, selector: 
         except Exception as e:  # noqa: BLE001
             mon = {"source": "monitorul_md", "status": FETCH_FAILED, "checked_through": since,
                    "previous_checked_through": since, "latest_seen": None, "editions": [], "signals": [],
-                   "evidence": None, "error": f"scan crashed: {type(e).__name__}: {str(e)[:200]}"}
+                   "evidence": None, "error": f"scan crashed: {type(e).__name__}"}   # type only, as above
         if not dry_run and mon.get("checked_through") is not None:
             state["monitorul"] = {"checked_through": mon["checked_through"], "updated": day}
         for sig in mon.get("signals") or []:
@@ -339,7 +343,8 @@ def run(profile: Path, acts: list[dict], fetcher, today: _dt.date, *, selector: 
 
     out = {"schema_version": 1, "date": day, "generated_at": now_iso(), "mode": mode, "dry_run": dry_run,
            "selector": selector, "full": selector == "all", "language": language, "schedule": schedule,
-           "acts": records, "monitorul": mon, "engine_attempts": rec.attempts, "engines": list(engines or [])}
+           "acts": records, "monitorul": mon, "engine_attempts": rec.attempts, "engines": list(engines or []),
+           "notes": list(notes or [])}
     if not dry_run:
         out = merge_day(profile, out)
     return finish(profile, out, state, dry_run=dry_run, flag_ids={a["id"] for a in chosen},

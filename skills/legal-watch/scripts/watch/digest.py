@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import datetime as _dt
 
-from .fetchers import firecrawl_format
+from .fetchers import firecrawl_calls, firecrawl_format
 
 MAX_DAYS = {"weekly": 9, "claude-schedule": 9}   # a weekly run that has not succeeded for 9 days is overdue
 
@@ -40,7 +40,13 @@ T = {
         "firecrawl_tip": ("Some sites refused automatic reading. Firecrawl may read them, with no guarantee: the "
                           "monitoring scripts need its CLI, logged in by you and added to the monitoring engines "
                           "(the wizard's first step `reading`, or ask to change it later). It is a paid service "
-                          "with a free monthly allowance.")},
+                          "with a free monthly allowance."),
+        "firecrawl_calls": ("Firecrawl calls this run: {n} (estimated credits: about {n}; actual billing only in "
+                            "your Firecrawl account)"),
+        "notes": {"firecrawl_not_allowed": ("Firecrawl was not used in this run: the setup step `reading` no longer "
+                                            "says `monitoring: on` (no credit spent). To use it again, connect it "
+                                            "through legal-workflow-update; to stop this note, remove the engine: "
+                                            "`legal_watch.py engines remove firecrawl`.")}},
     "ro": {
         "title": "Monitorizarea legislației", "result": {"OK": "fără modificări", "CHANGES": "modificări găsite",
                                                          "INCOMPLETE": "incomplet: nu toate actele principale au fost verificate",
@@ -70,7 +76,14 @@ T = {
         "firecrawl_tip": ("Unele site-uri au refuzat citirea automată. Firecrawl le poate citi, fără garanție: "
                           "scripturile de monitorizare au nevoie de CLI-ul său, autentificat de dvs. și adăugat la "
                           "motoarele monitorizării (primul pas al asistentului, `reading`, sau cereți schimbarea mai "
-                          "târziu). Este un serviciu plătit cu o cotă lunară gratuită.")},
+                          "târziu). Este un serviciu plătit cu o cotă lunară gratuită."),
+        "firecrawl_calls": ("Apeluri Firecrawl în această rulare: {n} (credite estimate: circa {n}; consumul real "
+                            "doar în contul dvs. Firecrawl)"),
+        "notes": {"firecrawl_not_allowed": ("Firecrawl nu a fost folosit în această rulare: pasul de configurare "
+                                            "`reading` nu mai conține `monitoring: on` (niciun credit consumat). "
+                                            "Pentru a-l folosi din nou, conectați-l prin legal-workflow-update; "
+                                            "pentru a opri acest mesaj, scoateți motorul: "
+                                            "`legal_watch.py engines remove firecrawl`.")}},
     "ru": {
         "title": "Мониторинг законов", "result": {"OK": "без изменений", "CHANGES": "есть изменения",
                                                   "INCOMPLETE": "неполно: проверены не все главные акты",
@@ -100,7 +113,14 @@ T = {
         "firecrawl_tip": ("Некоторые сайты отказали в автоматическом чтении. Firecrawl может их прочитать, без "
                           "гарантии: скриптам мониторинга нужен его CLI, в который вы входите сами и который "
                           "добавлен в способы чтения мониторинга (первый шаг мастера `reading` или попросите "
-                          "изменить позже). Это платный сервис с бесплатным месячным лимитом.")},
+                          "изменить позже). Это платный сервис с бесплатным месячным лимитом."),
+        "firecrawl_calls": ("Обращений к Firecrawl за прогон: {n} (оценка расхода, кредитов: около {n}; точный "
+                            "расход только в вашем аккаунте Firecrawl)"),
+        "notes": {"firecrawl_not_allowed": ("Firecrawl в этом прогоне не использовался: в шаге настройки `reading` "
+                                            "больше нет `monitoring: on` (кредиты не потрачены). Чтобы снова его "
+                                            "использовать, подключите его через legal-workflow-update; чтобы убрать "
+                                            "это сообщение, уберите способ чтения: "
+                                            "`legal_watch.py engines remove firecrawl`.")}},
 }
 
 
@@ -129,6 +149,8 @@ def needs_firecrawl_tip(run: dict | None) -> bool:
     refusal there would sell a paid service that the run would not even call.
     """
     if not run or "firecrawl" in (run.get("engines") or []):
+        return False
+    if "firecrawl_not_allowed" in (run.get("notes") or []):   # the user withdrew the yes: no sales pitch for it
         return False
     return any(set(u.get("reasons") or []) & set(REFUSALS) and firecrawl_format(u.get("url") or "") is not None
                for u in run.get("unverified") or [])
@@ -188,6 +210,11 @@ def render(run: dict, language: str = "en") -> str:
         lines.append("")
     if run.get("phrase_no_changes_allowed"):
         lines += [t["nochanges"], ""]
+    for code in run.get("notes") or []:
+        lines += [t["notes"].get(code, code), ""]
+    # why only with the attempts: a hand record merged into the day has none, and a guess must not look like data
+    if "firecrawl" in (run.get("engines") or []) and isinstance(run.get("engine_attempts"), list):
+        lines += [t["firecrawl_calls"].format(n=firecrawl_calls(run["engine_attempts"])), ""]
     h = run.get("health") or {}
     lines.append(f"{t['health']}: {h.get('last_complete') or t['never']}")
     if h.get("overdue"):

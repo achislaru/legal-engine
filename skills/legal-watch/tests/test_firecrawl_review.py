@@ -20,7 +20,8 @@ SKILL = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(SKILL / "scripts"))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import legal_watch as cli  # noqa: E402
-from test_firecrawl import FAKE_BIN, GAZETTE, HTML, LEGIS, MARKER, MD, EURLEX, FakeRun, fetcher, payload, proc  # noqa: E402
+from test_firecrawl import (FAKE_BIN, GAZETTE, HTML, LEGIS, MARKER, MD, EURLEX, FakeRun, allow, fetcher,  # noqa: E402
+                            payload, proc)
 from watch import fetchers as F, issues, library as lib, runner  # noqa: E402
 from watch.adapters.common import md_to_text  # noqa: E402
 from watch.contract import text_sha256  # noqa: E402
@@ -180,7 +181,18 @@ class CliBase(unittest.TestCase):
 
 
 class FetchCommand(CliBase):
-    """The safe entry point for conversations: the CLI's output never reaches the caller, only the page."""
+    """The safe entry point for conversations: the CLI's output never reaches the caller, only the page.
+
+    The profile allows Firecrawl for conversations (the consent `fetch` checks itself, see FirecrawlConsent).
+    """
+
+    def setUp(self):
+        super().setUp()
+        self.profile = self.dir / "profile"
+        allow(self.profile)
+
+    def call(self, *argv):
+        return super().call("--profile", str(self.profile), *argv)
 
     def fetch(self, out, url=LEGIS, name="page.md", **kw):
         fake, run = fetcher(out, **kw)
@@ -273,6 +285,7 @@ class EnginesSet(CliBase):
         self.path = self.profile / "laws" / "watchlist.yaml"
         self.state = self.profile / "laws" / "state.json"
         self.state.write_text('{"keep": true}', encoding="utf-8")
+        allow(self.profile)   # monitoring: on, so adding firecrawl is allowed here
 
     def test_connect_then_disconnect(self):
         before = lib.load_watchlist(self.path)

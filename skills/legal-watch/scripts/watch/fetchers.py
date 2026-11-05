@@ -91,6 +91,18 @@ FC_NO_CREDITS = "firecrawl: out of credits (plan limit reached)"
 # Errors that the next page of the same run would only repeat (and, logged out, each try would still cost a pause):
 # remembered per fetcher, i.e. per run.
 FC_FATAL = (FC_NOT_FOUND, FC_NOT_LOGGED_IN, FC_NO_CREDITS)
+FC_BAD_URL = "firecrawl: only http(s) page URLs can be read"
+
+
+def firecrawl_calls(attempts: list[dict]) -> int:
+    """How many pages a run asked Firecrawl for, from the chain's attempts: the base of the digest's credit estimate.
+
+    Not counted: errors that bill nothing (no CLI, not logged in, out of credits, a refused URL); a skipped site
+    leaves no attempt at all. A timeout or a failed read still counts: the service may have billed it. This is an
+    estimate, never the bill: only the user's Firecrawl account shows what was charged.
+    """
+    free = set(FC_FATAL) | {FC_BAD_URL}
+    return sum(1 for a in attempts or [] if a.get("via") == "firecrawl" and a.get("error") not in free)
 
 
 @dataclass
@@ -259,7 +271,7 @@ def firecrawl_argv(binary: str, url: str, fmt: str) -> list[str]:
     http(s) is refused, which also stops a value starting with `-` from being read as an option.
     """
     if urlparse(url).scheme not in ("http", "https") or not urlparse(url).netloc:
-        raise FetchConfigError("firecrawl: only http(s) page URLs can be read")
+        raise FetchConfigError(FC_BAD_URL)
     return [binary, "scrape", url, "--format", fmt, "--max-age", "0", "--json"]
 
 
@@ -373,21 +385,43 @@ class FirecrawlFetcher(_Paced):
             content, meta = parse_firecrawl_json(stdout, fmt)
             # why: without the target's real status a challenge or error page could pass as a read act
             status = firecrawl_status(meta)
+            # why inside the try: the metadata is CLI data too; a malformed URL makes urlparse raise with the value
+            # in its message, which must never reach the agent, the run record or the error log
+            final_url, title = firecrawl_page_meta(meta, url)
         except FirecrawlOutputError as e:   # its message is a fixed text, never the CLI's output
             return self._error(url, fetched_at, str(e))
-        final = meta.get("url")
-        final_url = final if isinstance(final, str) and urlparse(final).scheme in ("http", "https") else url
-        title = meta.get("title") if isinstance(meta.get("title"), str) else None
         if fmt in _HTML_FORMATS:
             res = page_result(url, content, status=status, via="firecrawl", final_url=final_url,
                               fetched_at=fetched_at)
         else:
             res = page_result(url, "", status=status, via="firecrawl", final_url=final_url, fetched_at=fetched_at,
                               markdown=content, title=title)
-        # Firecrawl exits 0 for a target 403/404 that still returned a page: the real status decides.
-        if res.status is not None and res.status >= 400 and not res.blocked:
-            res.error = f"HTTP {res.status} (reported by Firecrawl)"
+        # Firecrawl exits 0 for a target 403/404 that still returned a page: the real status decides. Only 2xx is a
+        # fresh page: a 1xx, a redirect it did not follow or a 304 "not modified" says nothing about today's text.
+        if not res.blocked and not 200 <= status < 300:
+            res.error = (f"HTTP {status} (reported by Firecrawl)" if status >= 400
+                         else f"HTTP {status} (reported by Firecrawl, not a page)")
         return res
+
+
+def firecrawl_page_meta(meta: dict, url: str) -> tuple[str, str | None]:
+    """(final URL, title) from the metadata, or `FC_UNREADABLE`.
+
+    A missing or non-http(s) final URL falls back to the requested one (as before); a URL that does not even parse
+    (a bracket, a fullwidth slash, a bad port) is unreadable output. The parse error itself is dropped: its message
+    quotes the value.
+    """
+    final, title = meta.get("url"), meta.get("title")
+    if title is not None and not isinstance(title, str):
+        title = None
+    if not isinstance(final, str):
+        return url, title
+    try:
+        parsed = urlparse(final)
+        parsed.port   # noqa: B018 — raises on a bad port; the adapters read it later
+    except ValueError:
+        raise FirecrawlOutputError(FC_UNREADABLE) from None
+    return (final if parsed.scheme in ("http", "https") and parsed.hostname else url), title
 
 
 class BrowserBusy(RuntimeError):
