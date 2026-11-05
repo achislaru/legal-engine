@@ -71,7 +71,9 @@ an interpretation; even a green result needs the agent's own reading.
 1. **Firecrawl, only if the user allowed it for conversations:** the `reading` row of
    `<profile>/context/integration-status.md` is `done` and its note contains `conversation: on`. A skipped or
    pending row, `conversation: off`, no row (a profile from 1.1) → not used, even when Firecrawl tools are
-   connected. Allowed: the Firecrawl tools in this session (scrape the official URL, no cache: `maxAge` 0); for
+   connected. Allowed: the Firecrawl tools in this session (scrape the official URL, no cache: `maxAge` 0; on
+   legis.md also `waitFor` 6000, since read at once it returns only "Conținutul se încarcă...", which is not the
+   act and never counts as read); for
    legis.md and monitorul.gov.md also the CLI through the engine's reader,
    `<engine>/.venv/bin/python <legal-workflow>/../legal-watch/scripts/legal_watch.py fetch --url <url> --out
    <matter>/work/sources/<act>-<date>.md` (`.html` for monitorul.gov.md). Never run `firecrawl` itself: the
