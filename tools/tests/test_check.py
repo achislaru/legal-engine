@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
+import os
 import subprocess
 import sys
 import tempfile
 import unittest
 import zipfile
+from unittest import mock
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
@@ -123,7 +125,10 @@ class Scan(unittest.TestCase):
 
     def test_staged_content_is_scanned_not_the_working_tree(self):
         """Codex review: data staged and then cleaned only in the working tree passed the hook."""
-        with tempfile.TemporaryDirectory() as tmp:
+        # why: run from the pre-commit hook, git exports GIT_DIR / GIT_INDEX_FILE (absolute in a linked worktree);
+        # inherited, they point this temp repo's `git add` and check.scan_staged at the REAL repository's index.
+        clean = {k: v for k, v in os.environ.items() if not k.startswith("GIT_")}
+        with tempfile.TemporaryDirectory() as tmp, mock.patch.dict(os.environ, clean, clear=True):
             base = Path(tmp)
             git = lambda *a: subprocess.run(["git", "-C", tmp, *a], check=True, capture_output=True)  # noqa: E731
             git("init", "-q")
