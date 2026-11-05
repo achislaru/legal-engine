@@ -148,9 +148,9 @@ class MalformedMetadata(Tmp):
 
 class OnlyTwoHundredsArePages(Tmp):
     def test_status_classes(self):
-        for status, err in ((100, "HTTP 100 (reported by Firecrawl, not a page)"),
-                            (302, "HTTP 302 (reported by Firecrawl, not a page)"),
-                            (304, "HTTP 304 (reported by Firecrawl, not a page)"),
+        for status, err in ((100, "firecrawl: HTTP 100 (reported by Firecrawl, not a page)"),
+                            (302, "firecrawl: HTTP 302 (reported by Firecrawl, not a page)"),
+                            (304, "firecrawl: HTTP 304 (reported by Firecrawl, not a page)"),
                             (200, None), (203, None), (299, None),
                             (404, "HTTP 404 (reported by Firecrawl)"), (500, "HTTP 500 (reported by Firecrawl)")):
             with self.subTest(status=status):
@@ -181,7 +181,7 @@ class OnlyTwoHundredsArePages(Tmp):
         fake, _ = fetcher(proc(payload("markdown", MD, statusCode=302)))
         with mock.patch.object(cli, "FirecrawlFetcher", lambda **k: fake):
             code, out, _ = self.call("fetch", "--url", LEGIS, "--out", str(self.dir / "a.md"))
-        self.assertEqual((code, json.loads(out)["error"]), (2, "HTTP 302 (reported by Firecrawl, not a page)"))
+        self.assertEqual((code, json.loads(out)["error"]), (2, "firecrawl: HTTP 302 (reported by Firecrawl, not a page)"))
         self.assertFalse((self.dir / "a.md").exists())
 
     def test_fetch_command_checks_the_status_itself(self):

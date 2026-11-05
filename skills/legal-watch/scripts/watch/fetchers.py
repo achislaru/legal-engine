@@ -400,7 +400,7 @@ class FirecrawlFetcher(_Paced):
         # fresh page: a 1xx, a redirect it did not follow or a 304 "not modified" says nothing about today's text.
         if not res.blocked and not 200 <= status < 300:
             res.error = (f"HTTP {status} (reported by Firecrawl)" if status >= 400
-                         else f"HTTP {status} (reported by Firecrawl, not a page)")
+                         else f"firecrawl: HTTP {status} (reported by Firecrawl, not a page)")
         return res
 
 
