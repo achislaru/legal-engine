@@ -56,7 +56,8 @@ class Evidence:
     http_status: int | None = None
     parser: str | None = None          # which parsing path matched (for calibration)
     parser_calibrated: bool = False    # the parser was checked against a live page of the source
-    via: str | None = None             # engine that fetched the page: urllib | playwright | command | host | fixture
+    # engine that fetched the page: urllib | playwright | command | firecrawl | host | fixture
+    via: str | None = None
 
 
 @dataclass

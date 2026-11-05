@@ -8,6 +8,11 @@ Adapters never depend on an engine: they take any object with `get(url) -> Fetch
 - `command`    — a command the user configured themselves (for example a paid scraping service wrapped in their
                  own script). The engine runs it with the URL and reads the page from stdout; it never sees, asks
                  for or stores a key.
+- `firecrawl`  — the Firecrawl CLI (`firecrawl-cli`, a paid service) that the user installed and logged in to
+                 themselves. A dedicated engine rather than a `command`, because it needs a format per site (markdown
+                 for legis.md, the whole raw HTML elsewhere), the target's real HTTP status from the JSON metadata, its
+                 own timeout and a fixed error list. The CLI uses the user's own login; the engine never sees, asks
+                 for, passes or stores a key.
 - `host`       — not a fetcher: the agent opens the page with its own web tools and records a version card
                  (`legal_watch.py record`).
 
@@ -20,9 +25,12 @@ from __future__ import annotations
 import datetime as _dt
 import fcntl
 import random
+import json
 import re
 import shlex
+import shutil
 import subprocess
+import tempfile
 import time
 import urllib.error
 import urllib.request
@@ -35,7 +43,16 @@ USER_AGENT = "Mozilla/5.0 (compatible; legal-engine-watch/1.0)"
 PAUSE_RANGE_S = (5.0, 15.0)   # politeness between requests to the same portals
 TIMEOUT_S = 45
 SETTLE_MS = 3_000
-ENGINES = ("urllib", "playwright", "command")
+ENGINES = ("urllib", "playwright", "command", "firecrawl")
+
+FIRECRAWL_BIN = "firecrawl"
+FIRECRAWL_TIMEOUT_S = 120             # the CLI has no timeout flag of its own, so the engine sets one
+# `rawHtml` is the unmodified page: Firecrawl's `html` and `markdown` are trimmed to the "main content" by default,
+# which would cut the EUR-Lex <title>/forceIndicator and the Gazette home table the parsers need.
+FIRECRAWL_DEFAULT_FORMAT = "rawHtml"
+# Sites whose parser is calibrated on Firecrawl markdown (legis.md: the act card and the version bar).
+FIRECRAWL_FORMAT_BY_HOST: dict[str, str] = {"www.legis.md": "markdown", "legis.md": "markdown"}
+_HTML_FORMATS = ("rawHtml", "html")
 
 # Signs of an anti-bot check page. A match means blocked, without any interaction.
 STRONG_MARKERS = (
@@ -50,6 +67,10 @@ WIDGET_PAGE_MAX_TEXT = 1500
 
 class FetchConfigError(ValueError):
     """The engine settings are unusable (unknown engine, a command without `{url}`)."""
+
+
+class FirecrawlOutputError(ValueError):
+    """The Firecrawl CLI printed something that is not a page in the expected JSON shape."""
 
 
 @dataclass
@@ -111,10 +132,14 @@ def _title(html: str) -> str:
 
 
 def page_result(url: str, html: str, *, status: int | None = 200, via: str, final_url: str | None = None,
-                fetched_at: str | None = None, markdown: str = "") -> FetchResult:
-    """A FetchResult from a page body; the anti-bot check is applied here for every engine."""
+                fetched_at: str | None = None, markdown: str = "", title: str | None = None) -> FetchResult:
+    """A FetchResult from a page body; the anti-bot check is applied here for every engine.
+
+    `title`: an engine that knows the page title without HTML (Firecrawl metadata) passes it; it wins over
+    the `<title>` of `html`.
+    """
     text = html_to_text(html) if html else markdown
-    title = _title(html)
+    title = title if title is not None else _title(html)
     reason = detect_challenge(status, title, html, text)
     return FetchResult(url=url, status=status, final_url=final_url or url, title=title, html=html, text=text,
                        fetched_at=fetched_at or now_iso(), blocked=reason is not None, blocked_reason=reason,
@@ -188,6 +213,132 @@ class CommandFetcher(_Paced):
         if "<html" in out[:2000].lower() or "<body" in out[:5000].lower():
             return page_result(url, out, via="command", fetched_at=fetched_at)
         return page_result(url, "", via="command", fetched_at=fetched_at, markdown=out)
+
+
+def firecrawl_format(url: str, table: dict[str, str] | None = None) -> str:
+    """The Firecrawl output format for a page: per site from the table, else the whole raw HTML."""
+    host = (urlparse(url).hostname or "").lower()
+    return (FIRECRAWL_FORMAT_BY_HOST if table is None else table).get(host, FIRECRAWL_DEFAULT_FORMAT)
+
+
+def firecrawl_argv(binary: str, url: str, fmt: str) -> list[str]:
+    """The exact CLI call. `--max-age 0`: a law check must read today's page, never Firecrawl's 2-day cache.
+
+    No key, no `login`, `env` or `view-config`: the CLI uses the login the user made themselves. A URL that is not
+    http(s) is refused, which also stops a value starting with `-` from being read as an option.
+    """
+    if urlparse(url).scheme not in ("http", "https") or not urlparse(url).netloc:
+        raise FetchConfigError("firecrawl: only http(s) page URLs can be read")
+    return [binary, "scrape", url, "--format", fmt, "--max-age", "0", "--json"]
+
+
+def parse_firecrawl_json(stdout: str, fmt: str) -> tuple[str, dict]:
+    """`--json` output → (content, metadata). Tolerates the API's `{"success":…, "data":{…}}` wrapper."""
+    try:
+        data = json.loads(stdout)
+    except (ValueError, TypeError) as e:
+        raise FirecrawlOutputError("firecrawl: output is not JSON") from e
+    if isinstance(data, dict) and isinstance(data.get("data"), dict):
+        data = data["data"]
+    if not isinstance(data, dict):
+        raise FirecrawlOutputError("firecrawl: JSON output is not an object")
+    # rawHtml and html are both whole-document HTML for the parsers; the other one is a usable fallback.
+    keys = [fmt] + ([k for k in _HTML_FORMATS if k != fmt] if fmt in _HTML_FORMATS else [])
+    content = next((data[k] for k in keys if isinstance(data.get(k), str) and data[k].strip()), "")
+    if not content:
+        raise FirecrawlOutputError(f"firecrawl: no {fmt} content in the output")
+    meta = data.get("metadata")
+    return content, meta if isinstance(meta, dict) else {}
+
+
+# stderr → a fixed message. stderr itself is never copied: it may echo the user's setup.
+_FIRECRAWL_STDERR = (
+    (("credit", "402"), "firecrawl: out of credits (plan limit reached)"),
+    (("not authenticated", "unauthorized", "401", "api key"),
+     "firecrawl: not logged in (run firecrawl login --browser yourself)"),
+    (("rate limit", "429"), "firecrawl: rate limited"),
+)
+
+
+class FirecrawlFetcher(_Paced):
+    """The user's logged-in Firecrawl CLI, called with an argv list (never a shell)."""
+
+    via = "firecrawl"
+
+    def __init__(self, *, binary: str | None = None, timeout: float = FIRECRAWL_TIMEOUT_S,
+                 formats: dict[str, str] | None = None, run=subprocess.run, which=shutil.which, **kw):
+        super().__init__(**kw)
+        self.binary, self.timeout, self.formats, self.run, self.which = binary, timeout, formats, run, which
+
+    def _error(self, url: str, fetched_at: str, error: str) -> FetchResult:
+        return FetchResult(url=url, status=None, fetched_at=fetched_at, via="firecrawl", error=error)
+
+    def get(self, url: str) -> FetchResult:
+        self.pause()
+        fetched_at = now_iso()
+        binary = self.binary or self.which(FIRECRAWL_BIN)
+        if not binary:
+            return self._error(url, fetched_at, "firecrawl: CLI not found on PATH "
+                                                "(npm i -g firecrawl-cli, then firecrawl login --browser)")
+        fmt = firecrawl_format(url, self.formats)
+        argv = firecrawl_argv(binary, url, fmt)
+        try:
+            # A fresh temp working folder: the CLI may save session files where it runs, and they must land neither
+            # in this repository nor in the user's legal profile.
+            with tempfile.TemporaryDirectory(prefix="legal-watch-fc-") as wd:
+                p = self.run(argv, capture_output=True, text=True, timeout=self.timeout, cwd=wd,
+                             stdin=subprocess.DEVNULL)
+        except subprocess.TimeoutExpired:
+            return self._error(url, fetched_at, f"firecrawl: timed out after {self.timeout:g} s")
+        except Exception as e:  # noqa: BLE001 — a missing node, a permission error: "not verified", never a crash
+            return self._error(url, fetched_at, f"firecrawl: could not start ({type(e).__name__})")
+        stdout, stderr = p.stdout or "", p.stderr or ""
+        if p.returncode != 0:
+            low = stderr.lower()
+            msg = next((m for pats, m in _FIRECRAWL_STDERR if any(x in low for x in pats)),
+                       f"firecrawl: exit {p.returncode}, {len(stderr)} bytes on stderr")
+            return self._error(url, fetched_at, msg)
+        notes: list[str] = []
+        try:
+            content, meta = parse_firecrawl_json(stdout, fmt)
+        except FirecrawlOutputError:
+            if not stdout.strip():
+                return self._error(url, fetched_at, "firecrawl: no page content")
+            try:
+                parsed = json.loads(stdout)
+            except ValueError:
+                pass
+            else:
+                # Valid JSON without the page is never read as a page: the JSON text would pass as markdown.
+                return self._error(url, fetched_at, "firecrawl: no page content" if isinstance(parsed, dict)
+                                   else "firecrawl: unreadable output")
+            # Not JSON (a CLI that prints the raw page): read it like the `command` engine does.
+            notes.append("firecrawl: output was not JSON; status not reported")
+            low = stdout.lower()
+            if "<html" in low[:2000] or "<body" in low[:5000]:
+                res = page_result(url, stdout, via="firecrawl", fetched_at=fetched_at)
+            else:
+                res = page_result(url, "", via="firecrawl", fetched_at=fetched_at, markdown=stdout)
+            res.notes.extend(notes)
+            return res
+        status = meta.get("statusCode")
+        if not isinstance(status, int) or isinstance(status, bool):
+            status = 200
+            notes.append("status not reported by Firecrawl")
+        final = meta.get("url")
+        final_url = final if isinstance(final, str) and urlparse(final).scheme in ("http", "https") else url
+        title = meta.get("title") if isinstance(meta.get("title"), str) else None
+        if fmt in _HTML_FORMATS:
+            res = page_result(url, content, status=status, via="firecrawl", final_url=final_url,
+                              fetched_at=fetched_at)
+        else:
+            res = page_result(url, "", status=status, via="firecrawl", final_url=final_url, fetched_at=fetched_at,
+                              markdown=content, title=title)
+        # Firecrawl exits 0 for a target 403/404 that still returned a page: the real status decides.
+        if res.status is not None and res.status >= 400 and not res.blocked:
+            res.error = f"HTTP {res.status} (reported by Firecrawl)"
+        res.notes.extend(notes)
+        return res
 
 
 class BrowserBusy(RuntimeError):
@@ -362,6 +513,8 @@ def build_chain(engines: list[str], *, command: str | None = None, browser_dir: 
             if stack is None or browser_dir is None:
                 raise FetchConfigError("engine 'playwright' needs a browser profile folder")
             out.append(stack.enter_context(PlaywrightFetcher(browser_dir, pause_range=pause_range)))
+        elif name == "firecrawl":
+            out.append(FirecrawlFetcher(pause_range=pause_range))
         else:
             raise FetchConfigError(f"unknown engine {name!r}; allowed: {', '.join(ENGINES)}")
     return ChainFetcher(out, names=list(engines), demote=demote)

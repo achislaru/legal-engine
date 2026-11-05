@@ -20,7 +20,7 @@ def source_doc_id(act: dict, kind: str) -> str | None:
 
 
 def is_markdown(r: FetchResult) -> bool:
-    """The engine returned markdown instead of HTML (a user `command` engine): the markdown parsers apply."""
+    """The engine returned markdown instead of HTML (the `firecrawl` or a user `command` engine): the markdown parsers apply."""
     return bool(r.markdown) and not r.html
 
 

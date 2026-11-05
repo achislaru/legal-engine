@@ -19,7 +19,7 @@ live body was never read this way):
   «[Art.5 abrogat prin …]» would otherwise look like a repeal of the whole act.
 
 Markdown (`legis_md/markdown-v1`, calibrated on live markdown pages of three acts, see the fixtures
-`markdown-*.md`), used when the engine returned markdown and no HTML (a user `command` engine):
+`markdown-*.md`), used when the engine returned markdown and no HTML (the `firecrawl` or a user `command` engine):
 - the act card «Fişa actului juridic»: amendment labels «LP189 din 10.07.25, MO502-505/25.09.25 art.652; în vigoare
   25.10.25» and «Data abrogării | <date>»;
 - the version bar at the end of the page («- 25-10-2025»): every date is a version; its label comes from the

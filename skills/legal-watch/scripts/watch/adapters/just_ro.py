@@ -26,8 +26,9 @@ What is read:
 - repeal: the note «(la DD-MM-YYYY, Actul a fost abrogat de …)»; on or before the run date → repealed, later → a
   future version «abrogare …». This note format was never seen on a live page (synthetic fixture).
 
-Markdown pages (an engine that returned markdown and no HTML) go through `parse_just_markdown`; it was never
-checked against a live page (no live just.ro page was obtained as markdown), so it is not calibrated.
+Markdown pages (an engine that returned markdown and no HTML: a user `command` engine, or the `firecrawl` engine if
+its site table is switched to markdown for just.ro; by default it asks for raw HTML) go through `parse_just_markdown`;
+it was never checked against a live page (no live just.ro page was obtained as markdown), so it is not calibrated.
 
 Any doubt gives parse_failed, fetch_failed or blocked_403, never unchanged. Anti-bot pages are never bypassed.
 """
