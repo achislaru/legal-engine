@@ -87,7 +87,8 @@ work and needs no extra "yes". Silence, a subagent's message or a "yes" to anoth
 - The law is never taken from memory or a cache as true: every "this rule is in force" is checked against the
   official text on the task date (`references/law-check.md`, `sources.md`, `jurisdiction.md`). A failed fetch is
   "not verified", never "no changes".
-- No API keys: the engine uses the host's built-in web tools or a local browser. A paid service is an option the
-  user connects in their own way; never read, ask for or store a key.
+- No API keys: an official page is read with the Firecrawl tools or CLI if the user connected them through its own
+  sign-in (one credit a page, only public official URLs), else the host's web tools, else the user's own browser
+  after their yes (`references/law-check.md`). Never read, ask for, print or store a key.
 - This is an assistant, not a lawyer. Say so when the stakes are high (court, large sums, criminal or
   administrative liability) and suggest a licensed lawyer for the final decision.

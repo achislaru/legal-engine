@@ -26,6 +26,7 @@ The profile script is `<skill-dir>/../legal-workflow/scripts/legal_profile.py` (
 | a preference for documents, default forum, a decision to remember | `context/house-style.md` (decisions table: date, decision, applies to) |
 | turn a module on or off | `<lp> modules set <id>=on|off` |
 | redo a wizard step | the step from `../legal-workflow-setup/references/questionnaire.md`, then `<lp> step set <id> --status done` |
+| connect or disconnect Firecrawl | step `reading` of `../legal-workflow-setup/references/questionnaire.md`, then `<lp> step set reading --status done|skipped --note …`; disconnecting is the user's own act (`firecrawl logout`, removing the MCP server) |
 | a new profile folder | `<lp> profile init --dir <new> --switch`; offer to copy (never move or delete) the old folder's files after a "yes" |
 | a file of another `schema_version` | the migrations below |
 | how the engine itself works (a wrong rule, a missing check, a bug) | not here: draft a short issue (what happened, what was expected, without personal data or document text) for the user to file in the engine's repository; the engine folder is a shared checkout that `git pull` updates |
@@ -35,7 +36,7 @@ The profile script is `<skill-dir>/../legal-workflow/scripts/legal_profile.py` (
 - edit a matter, its `intake.json`, its files or a row of `matters/log.md` (they are the history);
 - turn one isolated case into a general rule without the user saying so;
 - write a context file or `modules.json` before the user's "yes" to that exact change;
-- edit the engine folder, or print, ask for or store a key or a password.
+- edit the engine folder, or print, ask for or store a key, a token or a password.
 
 ## Migrations
 

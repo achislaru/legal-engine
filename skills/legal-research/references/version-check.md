@@ -68,8 +68,10 @@ jurisdiction is in [access.md](access.md).
 For each closed point: the URL of the official source (not an aggregator), the time it was opened **today** and a
 verbatim quote of 15 to 300 characters in the language of the act: the line the conclusion stands on (the consolidation
 label, "intră în vigoare", the operative part). Save the text you read when you can
-(`<matter>/work/sources/<act>-<date>.txt` or `.html`) and give `text_file` and `text_sha256`: the checker then
-confirms that each quote is really in it (saved HTML is compared without tags and entities). A quote that was
+(`<matter>/work/sources/<act>-<date>.txt`, `.html` or `.md`) and give `text_file` and `text_sha256`: the checker
+then confirms that each quote is really in it (saved HTML is compared without tags and entities, saved markdown from
+Firecrawl as plain text). The Firecrawl CLI writes such a file itself:
+`firecrawl scrape <url> --format markdown --max-age 0 -o <matter>/work/sources/<act>-<date>.md`. A quote that was
 not machine-checked is reported as such.
 
 An archived copy (for example the Wayback Machine) of an official page confirms the text on its own date, not the

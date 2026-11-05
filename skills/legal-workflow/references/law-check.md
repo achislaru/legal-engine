@@ -66,11 +66,16 @@ an interpretation; even a green result needs the agent's own reading.
 
 ## When a source is unavailable
 
-After a failure try the direct record or official PDF, another allowed way of reading, or another official
-publication (register → official journal → the issuing authority). When the host's web tools are refused (on
-2026-11-05 legis.md answered 403 and legislatie.just.ro dropped them), the user's own browser through the browser
-tools is the next way of reading, on the user's yes. Keep each address and result. Never get
-around access restrictions and never take an anti-bot page for the act. A few meaningful routes are enough.
+Read an official page in this order: the Firecrawl tools if they are connected in this session (scrape the
+official URL, no cache: `maxAge` 0); else the Firecrawl CLI if `tools/doctor.py` shows it logged in
+(`firecrawl scrape <url> --format markdown --max-age 0 -o <matter>/work/sources/<act>-<date>.md`); else the host's
+web tools; else the user's own browser after their yes. Each Firecrawl page costs the user one credit. Only public
+official URLs go to Firecrawl, never document text or personal data. A page that is still an anti-bot check stays
+"not verified". (On 2026-11-05 legis.md answered 403 and legislatie.just.ro dropped
+the host's web tools.) After a failure try the direct record or official PDF, another allowed way of reading, or
+another official publication (register → official journal → the issuing authority). Keep each address and result.
+Never get around access restrictions and never take an anti-bot page for the act. A few meaningful routes are
+enough.
 
 Another official copy may confirm the text but not the current version: check later amendments separately. If
 that fails, mark `partial`, list the dependent findings and continue the independent checks. The result reads:

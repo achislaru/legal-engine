@@ -15,8 +15,9 @@ on the task date before they carry a conclusion.
       recipient's role (procedure 2) and country (procedure 3).
 - [ ] The site is the user's: confirm the domain belongs to their firm before reading it (a typo or an example
       domain is someone else's site).
-- [ ] Trackers before consent: load the page and each embedded frame with plain GET requests only (never submit a
-      form, never click the banner) and look for tag managers, analytics and advertising scripts. Non-essential
+- [ ] Trackers before consent: load the page and each embedded frame with plain GET requests only (not through
+      Firecrawl or any rendering service: it runs JavaScript and changes what loads; never submit a form, never
+      click the banner) and look for tag managers, analytics and advertising scripts. Non-essential
       ones need consent first (Romania: Law 506/2004; Moldova: the rule found per the law map). This is a static
       screening: a script in the source may be blocked by the consent logic, and one loaded later by JavaScript
       is not seen. What really loads before consent, and whether refusal and withdrawal work, stays "not
