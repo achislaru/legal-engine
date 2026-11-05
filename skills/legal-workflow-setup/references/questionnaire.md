@@ -61,9 +61,9 @@ Without it those acts are checked by hand in the user's own browser, and in unat
 (`../legal-watch/references/engines.md`).
 
 **Cost** (on 2026-11-05, check firecrawl.dev/pricing): Free plan 1,000 credits a month, 1 credit per page; Hobby
-$19 a month (5,000 credits); Standard $99 a month (100,000 credits). Estimate for the user: monitoring costs about
-the number of acts on legis.md and monitorul.gov.md that refuse plain requests × runs a month; a matter reads a few
-pages.
+$19 a month (5,000 credits); Standard $99 a month (100,000 credits). An estimate, not a bill: monitoring costs about
+the acts on legis.md and monitorul.gov.md that refuse plain requests × runs a month, plus the Gazette scan when it
+refuses them too (up to 41 pages a run); a matter reads a few pages (`../legal-watch/references/engines.md`).
 
 **Data.** Only the addresses of public official pages go to Firecrawl (a US service), never document text or
 personal data.
@@ -103,20 +103,33 @@ Never use a key in chat, the `--api-key` option, the CLI's credentials file, `fi
   not logged in` or `login state unknown` means not yet.
 - No test scrape without a separate "yes": it costs a credit.
 
-**Record** (the note is the consent the other skills read; grammar `conversation: on|off; monitoring: on|off`):
+**Record** (the note is the consent; the scripts check it too; grammar `conversation: on|off; monitoring: on|off`,
+then `waiting: <what>` for a part not working yet):
 
 - connected as chosen: `legal_profile.py step set reading --status done --note "conversation: on; monitoring: on"`
   (`off` for the part not chosen);
-- chosen but not working yet: `--status pending --note "conversation: on; monitoring: on; waiting: <what>"`, for
-  example `waiting: restart for MCP tools` or `waiting: cli login` (the CLI was chosen and the doctor line is not
-  `OK`); the wizard goes on and asks again at the next run, and until then Firecrawl is not used;
+- one chosen part works, the other not yet: `done` with the working part `on` and the other `off; waiting: <what>`,
+  for example `"conversation: on; monitoring: off; waiting: cli login"` (the doctor line is not `OK`); record it
+  again with `on` once it works;
+- nothing chosen works yet: `--status pending --note "conversation: on; monitoring: on; waiting: <what>"`, for
+  example `waiting: restart for MCP tools`; the wizard asks again at the next run, until then Firecrawl is not used;
 - later: `--status skipped --note "later"`; skip: `--status skipped --note "not connected"`.
 
-Firecrawl is used in conversations only when the row is `done` with `conversation: on`
-(`../legal-workflow/references/law-check.md`), and in monitoring only when `firecrawl` is in the watchlist
-engines; a skipped or pending row never turns it on, even when an MCP server is connected. Tell the user that step 8
-(`laws`) offers the `firecrawl` engine with `monitoring: on`, and that `legal-workflow-update` connects or
-disconnects Firecrawl later at any time.
+**Monitoring follows the resulting note** once `laws/watchlist.yaml` exists (after step 8, also when this row becomes
+`done` later; before it, step 8 offers the engine). `watch` = `legal_watch.py` of `../legal-watch/SKILL.md`:
+
+- `monitoring: on` in a `done` row: `watch engines add firecrawl`;
+- `monitoring` no longer `on` (off, pending, skipped): `watch engines remove firecrawl`;
+- only `conversation` changed: no engines command.
+
+Both keep the other engines and change nothing when there is nothing to change (`"changed": false`). After
+`"changed": true`, if a weekly job is installed: `watch schedule plan`, then `watch schedule install` again after the
+user's yes (cron: the new line of `watch schedule plan --kind cron`).
+
+The scripts check the note themselves: `watch fetch` refuses without `conversation: on`, adding `firecrawl` (`watch
+init --engines`, `watch engines add|set`) refuses without `monitoring: on`, and a run whose engines still name
+`firecrawl` without it skips Firecrawl (no credit) and says so in the digest. A skipped or pending row never turns
+it on, even when an MCP server is connected (`../legal-workflow/references/law-check.md`).
 
 ### 2. `firms`
 
