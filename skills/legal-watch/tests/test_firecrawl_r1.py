@@ -162,5 +162,146 @@ class SnapshotIsTheHashedText(unittest.TestCase):
         self.assertIn("Articolul 1", runner.official_text(GAZETTE, rec, None))
 
 
+class CliBase(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.dir = Path(self.tmp.name)
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def call(self, *argv):
+        out, err = io.StringIO(), io.StringIO()
+        with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
+            code = cli.main(list(argv))
+        return code, out.getvalue(), err.getvalue()
+
+
+class FetchCommand(CliBase):
+    """D7/X2: the safe entry point for conversations: the CLI's output never reaches the caller, only the page."""
+
+    def fetch(self, out, url=LEGIS, name="page.md", **kw):
+        fake, run = fetcher(out, **kw)
+        target = self.dir / "sources" / name
+        with mock.patch.object(cli, "FirecrawlFetcher", lambda **k: fake):
+            code, stdout, stderr = self.call("fetch", "--url", url, "--out", str(target))
+        return code, stdout, stderr, target, run
+
+    def test_markdown_page_is_saved_and_summarised(self):
+        code, out, err, target, run = self.fetch(proc(payload("markdown", MD, statusCode=200), stderr=MARKER))
+        self.assertEqual(code, 0, err)
+        self.assertEqual(target.read_text(encoding="utf-8"), MD)
+        self.assertEqual(json.loads(out), {"url": LEGIS, "via": "firecrawl", "status": 200, "format": "markdown",
+                                           "saved": str(target),
+                                           "sha256": hashlib.sha256(MD.encode("utf-8")).hexdigest()})
+        self.assertNotIn(MARKER, out + err)
+        self.assertEqual(run.calls[0]["argv"], F.firecrawl_argv(FAKE_BIN, LEGIS, "markdown"))
+
+    def test_html_page_for_the_gazette(self):
+        code, out, err, target, _ = self.fetch(proc(payload("rawHtml", HTML, statusCode=200)), url=GAZETTE,
+                                               name="gazette.html")
+        self.assertEqual(code, 0, err)
+        self.assertEqual((target.read_text(encoding="utf-8"), json.loads(out)["format"]), (HTML, "rawHtml"))
+
+    def test_failures_save_nothing_and_print_a_fixed_error(self):
+        challenge = "# Just a moment...\n\nEfectuarea verificării de securitate\n"
+        cases = [
+            (proc(stderr=f"Not authenticated {MARKER}", rc=1), NOT_LOGGED),
+            (proc(f"<html>{MARKER}</html>"), "firecrawl: unreadable output"),
+            (proc(payload("markdown", MD)), "firecrawl: page status not reported"),
+            (proc(payload("markdown", challenge, statusCode=200)), "challenge marker: 'just a moment'"),
+            (proc(payload("markdown", MD, statusCode=404)), "HTTP 404 (reported by Firecrawl)"),
+            (proc(payload("markdown", MD, statusCode=403)), "HTTP 403"),
+            (__import__("subprocess").TimeoutExpired(["firecrawl"], 120), "firecrawl: timed out after 120 s"),
+        ]
+        for out, msg in cases:
+            with self.subTest(msg=msg):
+                code, stdout, stderr, target, _ = self.fetch(out)
+                self.assertEqual(code, 2)
+                self.assertFalse(target.exists())
+                self.assertEqual(json.loads(stdout), {"url": LEGIS, "via": "firecrawl", "status": json.loads(stdout)
+                                                      ["status"], "error": msg, "saved": None})
+                self.assertNotIn(MARKER, stdout + stderr)
+
+    def test_site_not_on_the_list_is_refused_without_a_call(self):
+        code, out, _, target, run = self.fetch(proc(payload("rawHtml", HTML, statusCode=200)), url=EURLEX,
+                                               name="eu.html")
+        self.assertEqual((code, json.loads(out)["error"], run.calls), (2, SKIP, []))
+        self.assertFalse(target.exists())
+
+    def test_out_suffix_must_match_the_format(self):
+        for url, name in ((LEGIS, "page.html"), (GAZETTE, "page.md"), (LEGIS, "page.txt")):
+            with self.subTest(name=name):
+                code, out, err, target, run = self.fetch(proc(payload("markdown", MD, statusCode=200)), url=url,
+                                                         name=name)
+                self.assertEqual((code, run.calls), (2, []))
+                self.assertIn("--out must end in", err)
+                self.assertFalse(target.exists())
+
+    def test_out_inside_the_engine_is_refused(self):
+        fake, run = fetcher(proc(payload("markdown", MD, statusCode=200)))
+        with mock.patch.object(cli, "FirecrawlFetcher", lambda **k: fake):
+            code, _, err = self.call("fetch", "--url", LEGIS, "--out", str(lib.SKILL / "x.md"))
+        self.assertEqual(code, 2)
+        self.assertFalse((lib.SKILL / "x.md").exists())
+        self.assertEqual(run.calls, [])
+
+    def test_real_fetcher_is_built_with_no_pause(self):
+        with mock.patch.object(cli, "FirecrawlFetcher") as cls:
+            cls.return_value.get.return_value = F.FetchResult(url=LEGIS, status=None, via="firecrawl", error="x")
+            self.call("fetch", "--url", LEGIS, "--out", str(self.dir / "a.md"))
+        self.assertEqual(cls.call_args.kwargs, {"pause_range": (0, 0)})
+
+    def test_usage_names_fetch_and_engines_set(self):
+        self.assertIn("legal_watch.py fetch --url <url> --out <file> [--engine firecrawl]", cli.__doc__)
+        self.assertIn("legal_watch.py engines set <engine,…>", cli.__doc__)
+
+
+class EnginesSet(CliBase):
+    """D9/X7: connect or disconnect Firecrawl later: only settings.engines changes; acts, state and texts stay."""
+
+    def setUp(self):
+        super().setUp()
+        self.profile = self.dir / "profile"
+        _, niches = lib.load_catalog()
+        code, _, err = self.call("--profile", str(self.profile), "init", "--niches", next(iter(niches["niches"])),
+                                 "--acts", "none", "--add", "eu.reg.2016-679", "--engines", "urllib,host",
+                                 "--language", "ro")
+        self.assertEqual(code, 0, err)
+        self.path = self.profile / "laws" / "watchlist.yaml"
+        self.state = self.profile / "laws" / "state.json"
+        self.state.write_text('{"keep": true}', encoding="utf-8")
+
+    def test_connect_then_disconnect(self):
+        before = lib.load_watchlist(self.path)
+        code, out, err = self.call("--profile", str(self.profile), "engines", "set", "urllib,firecrawl,host")
+        self.assertEqual(code, 0, err)
+        after = lib.load_watchlist(self.path)
+        self.assertEqual(after["settings"]["engines"], ["urllib", "firecrawl", "host"])
+        self.assertEqual({**after["settings"], "engines": None}, {**before["settings"], "engines": None})
+        self.assertEqual((after["acts"], after["niches"], after["categories"]),
+                         (before["acts"], before["niches"], before["categories"]))
+        self.assertEqual(self.state.read_text(encoding="utf-8"), '{"keep": true}')
+        self.assertEqual(json.loads(out)["engines"], ["urllib", "firecrawl", "host"])
+        self.assertIn("schedule install", json.loads(out)["next"])
+        code, _, err = self.call("--profile", str(self.profile), "engines", "set", "urllib,host")
+        self.assertEqual(code, 0, err)
+        self.assertEqual(lib.load_watchlist(self.path)["settings"]["engines"], ["urllib", "host"])
+
+    def test_bad_lists_change_nothing(self):
+        raw = self.path.read_text(encoding="utf-8")
+        for bad in ("", "urllib,curl", "urllib,urllib", "command", " , "):
+            with self.subTest(bad=bad):
+                code, _, err = self.call("--profile", str(self.profile), "engines", "set", bad)
+                self.assertEqual(code, 2)
+                self.assertTrue(err.startswith("legal_watch: "), err)
+                self.assertEqual(self.path.read_text(encoding="utf-8"), raw)
+
+    def test_needs_a_watchlist(self):
+        code, _, err = self.call("--profile", str(self.dir / "empty"), "engines", "set", "urllib")
+        self.assertEqual(code, 2)
+        self.assertIn("watchlist not found", err)
+
+
 if __name__ == "__main__":
     unittest.main()

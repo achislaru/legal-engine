@@ -13,6 +13,12 @@
     legal_watch.py prune --runs-older DAYS [--apply]   list (or, with --apply, delete) old run folders
     legal_watch.py run [--acts all|p1|id,…] [--today YYYY-MM-DD] [--dry-run] [--no-gazette]
     legal_watch.py record --card <version-card.json> [--root <matter>] [--via host|firecrawl]
+    legal_watch.py fetch --url <url> --out <file> [--engine firecrawl]
+                        read one official page through the Firecrawl CLI for a conversation: saves only an
+                        accepted page (.md for legis.md, .html for monitorul.gov.md), prints a short JSON; exit 0
+                        saved, 2 not verified (the CLI's own output is never shown)
+    legal_watch.py engines set <engine,…>   change only settings.engines (e.g. urllib,firecrawl,host to connect
+                        Firecrawl, urllib,host to disconnect); acts, state and texts are kept
     legal_watch.py digest [--date YYYY-MM-DD]
     legal_watch.py index scan <contract> --jurisdiction MD|RO [--write] [--force]
     legal_watch.py index check | pending
@@ -20,12 +26,14 @@
     legal_watch.py schedule plan|install|remove [--kind launchd|cron|claude-schedule]
 
 Global: --profile <dir> (default: the profile of legal-workflow's config.json).
-Exit codes: 0 ok (run: OK), 1 run: CHANGES / check: errors, 2 bad input or run: INCOMPLETE, 3 unexpected error.
+Exit codes: 0 ok (run: OK), 1 run: CHANGES / check: errors, 2 bad input, run: INCOMPLETE or fetch: not verified,
+3 unexpected error.
 """
 from __future__ import annotations
 
 import argparse
 import contextlib
+import hashlib
 import datetime as dt
 import json
 import sys
@@ -36,7 +44,8 @@ sys.path.insert(0, str(HERE))
 import shutil  # noqa: E402
 
 from watch import clauses, issues, library as lib, manual, report, runner, schedule  # noqa: E402
-from watch.fetchers import BrowserBusy, FetchConfigError, HostOnly, build_chain  # noqa: E402
+from watch.fetchers import (BrowserBusy, FetchConfigError, FirecrawlFetcher, HostOnly, build_chain,  # noqa: E402
+                            firecrawl_format, firecrawl_skip_error)
 
 WORKFLOW_SCRIPTS = lib.SKILL.parent / "legal-workflow" / "scripts"
 
@@ -245,6 +254,57 @@ def cmd_record(a) -> int:
     return 0
 
 
+# The file suffix a saved page needs: `.md` makes manual.saved_text and check_version read it as markdown.
+FETCH_SUFFIXES = {"markdown": (".md",), "rawHtml": (".html", ".htm")}
+
+
+def cmd_fetch(a) -> int:
+    """One official page through the Firecrawl CLI, for a conversation (the hand check route).
+
+    why a command and not the bare `firecrawl scrape … -o`: the bare CLI shows its stdout and stderr to the agent
+    (stderr may echo the user's setup), runs in the agent's folder (session files) and has no timeout. Here the
+    same FirecrawlFetcher as monitoring runs it: argv only, temp folder, timeout, the allowlist, the anti-bot check,
+    fixed errors. Only an accepted page is written; nothing of the CLI's own output is printed.
+    """
+    fmt = firecrawl_format(a.url)
+    if fmt is None:
+        _print({"url": a.url, "via": "firecrawl", "status": None, "error": firecrawl_skip_error(), "saved": None})
+        return 2
+    out = Path(a.out).expanduser()
+    if out.suffix.lower() not in FETCH_SUFFIXES[fmt]:
+        raise lib.WatchError(f"--out must end in {' or '.join(FETCH_SUFFIXES[fmt])} for a {fmt} page of this site")
+    lib.refuse_engine(out)   # why: an official text saved for a matter belongs to the user's profile, never here
+    res = FirecrawlFetcher(pause_range=(0, 0)).get(a.url)
+    ok = not res.error and not res.blocked and res.status is not None and res.status < 400
+    if not ok:
+        _print({"url": a.url, "via": "firecrawl", "status": res.status,
+                "error": res.error or res.blocked_reason or f"HTTP {res.status}", "saved": None})
+        return 2
+    content = res.markdown if fmt == "markdown" else res.html
+    lib.write_atomic(out, content)
+    _print({"url": a.url, "via": "firecrawl", "status": res.status, "format": fmt, "saved": str(out),
+            "sha256": hashlib.sha256(content.encode("utf-8")).hexdigest()})
+    return 0
+
+
+def cmd_engines(a) -> int:
+    """Change only `settings.engines` (connect or disconnect Firecrawl later); acts, state and texts stay."""
+    profile = resolve_profile(a.profile)
+    path = lib.laws_dir(profile) / "watchlist.yaml"
+    wl = lib.load_watchlist(path)
+    engines = _csv(a.engines)
+    if len(set(engines)) != len(engines):
+        raise lib.WatchError(f"an engine is named twice in {','.join(engines)}")
+    data = {"schema_version": wl["schema_version"], "settings": {**wl["settings"], "engines": engines},
+            "niches": wl["niches"], "categories": wl["categories"], "acts": wl["acts"]}
+    lib.validate_watchlist(json.loads(json.dumps(data)))
+    lib.write_atomic(path, lib.dump_watchlist(data))
+    # why the hint: a launchd job keeps the PATH of its install; after installing the CLI it must be installed again
+    _print({"engines": engines, "next": "if a weekly job is installed, run `legal_watch.py schedule install` again "
+                                        "(cron: `schedule plan --kind cron`) so it gets the current PATH"})
+    return 0
+
+
 def cmd_digest(a) -> int:
     profile = resolve_profile(a.profile)
     runs = lib.laws_dir(profile) / "runs"
@@ -343,6 +403,13 @@ def parser() -> argparse.ArgumentParser:
     rc.add_argument("--root")
     # why: a page the agent read through Firecrawl is still a check by hand; the flag only records the tool
     rc.add_argument("--via", default="host", choices=manual.VIA)
+    fe = sub.add_parser("fetch")
+    fe.add_argument("--url", required=True)
+    fe.add_argument("--out", required=True)
+    fe.add_argument("--engine", default="firecrawl", choices=("firecrawl",))
+    en = sub.add_parser("engines")
+    en.add_argument("op", choices=("set",))
+    en.add_argument("engines")
     d = sub.add_parser("digest")
     d.add_argument("--date")
     x = sub.add_parser("index")
@@ -362,7 +429,8 @@ def parser() -> argparse.ArgumentParser:
 
 COMMANDS = {"catalog": cmd_catalog, "suggest": cmd_suggest, "init": cmd_init, "show": cmd_show, "run": cmd_run,
             "issues": cmd_issues, "report": cmd_report, "source": cmd_source, "prune": cmd_prune,
-            "record": cmd_record, "digest": cmd_digest, "index": cmd_index, "schedule": cmd_schedule}
+            "record": cmd_record, "digest": cmd_digest, "index": cmd_index, "schedule": cmd_schedule,
+            "fetch": cmd_fetch, "engines": cmd_engines}
 
 
 def main(argv: list[str] | None = None) -> int:
