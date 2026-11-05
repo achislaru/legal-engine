@@ -41,7 +41,7 @@ from dataclasses import dataclass, field
 
 from ..contract import (BLOCKED_403, FETCH_FAILED, PARSE_FAILED, AdapterResult, Evidence, Redaction,
                         act_number_year, classify, parse_date, text_sha256)
-from ..fetchers import Fetcher, FetchResult
+from ..fetchers import Fetcher, FetchResult, shown_title, shown_value
 from .common import is_markdown, page_text, source_doc_id
 
 ADAPTER = "just_ro"
@@ -299,7 +299,7 @@ def result_from_fetch(act: dict, r: FetchResult, today: _dt.date, *, adapter: st
     if r.error:
         return fail(FETCH_FAILED, r.error)
     if r.blocked:
-        return fail(BLOCKED_403, f"{r.blocked_reason}; page title {r.title!r}; "
+        return fail(BLOCKED_403, f"{r.blocked_reason}; page title {shown_title(r)}; "
                                  "anti-bot check not bypassed (by design)")
     if r.status is None or r.status >= 400:
         return fail(FETCH_FAILED, f"HTTP {r.status}")
@@ -318,8 +318,8 @@ def result_from_fetch(act: dict, r: FetchResult, today: _dt.date, *, adapter: st
     if not act.get("code") and act_number_year(act) is None:
         return fail(PARSE_FAILED, f"{act_id} has no number/year: the page cannot be checked to be this act")
     if not identifies_act(act, r.title, page.heading):
-        return fail(PARSE_FAILED, f"page does not identify {act_id} (title {r.title!r}, "
-                                  f"heading {page.heading!r})")
+        return fail(PARSE_FAILED, f"page does not identify {act_id} (title {shown_title(r)}, "
+                                  f"heading {shown_value(r, page.heading)})")
     return None, page, ev
 
 

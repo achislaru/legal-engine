@@ -38,7 +38,7 @@ import re
 
 from ..contract import (BLOCKED_403, FETCH_FAILED, PARSE_FAILED, AdapterResult, Evidence, Redaction,
                         act_number_year, classify, parse_date, text_sha256)
-from ..fetchers import Fetcher, FetchResult
+from ..fetchers import Fetcher, FetchResult, shown_title
 from .common import is_markdown, page_text, source_doc_id
 
 ADAPTER = "legis_md"
@@ -224,7 +224,7 @@ def check_act(act: dict, fetcher: Fetcher, today: _dt.date) -> AdapterResult:
     if r.error:
         return fail(FETCH_FAILED, r.error)
     if r.blocked:
-        return fail(BLOCKED_403, f"{r.blocked_reason}; page title {r.title!r}; "
+        return fail(BLOCKED_403, f"{r.blocked_reason}; page title {shown_title(r)}; "
                                  "anti-bot check not bypassed (by design)")
     if r.status is None or r.status >= 400:
         return fail(FETCH_FAILED, f"HTTP {r.status}")
@@ -236,7 +236,7 @@ def check_act(act: dict, fetcher: Fetcher, today: _dt.date) -> AdapterResult:
     if act_number_year(act) is None:
         return fail(PARSE_FAILED, f"{act_id} has no number/year: the page cannot be checked to be this act")
     if not identifies_act(act, r.title, text):
-        return fail(PARSE_FAILED, f"page does not identify {act_id} (title {r.title!r})")
+        return fail(PARSE_FAILED, f"page does not identify {act_id} (title {shown_title(r)})")
 
     if md:
         reds, repealed, by, mode = parse_page_markdown(text, doc_id, today)

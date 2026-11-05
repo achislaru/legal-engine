@@ -123,6 +123,24 @@ class FetchResult:
     notes: list[str] = field(default_factory=list)
 
 
+# What the adapters show instead of a page title (or heading) that came from the Firecrawl CLI.
+HIDDEN_TITLE = "(not shown: reported by Firecrawl)"
+
+
+def shown_value(r: FetchResult, value: str | None) -> str:
+    """A value read from the page (title, heading) for an error text: quoted, or `HIDDEN_TITLE` for Firecrawl.
+
+    why: errors go to run.json, issues.json, the digest and the report, and everything from the Firecrawl CLI is
+    kept out of them (its own errors are fixed texts). The value stays in the result for the identity check;
+    other engines keep showing it, it tells the user which page answered.
+    """
+    return HIDDEN_TITLE if r.via == "firecrawl" else repr(value)
+
+
+def shown_title(r: FetchResult) -> str:
+    return shown_value(r, r.title)
+
+
 class Fetcher(Protocol):
     def get(self, url: str) -> FetchResult: ...
 

@@ -35,7 +35,7 @@ import re
 
 from ..contract import (BLOCKED_403, FETCH_FAILED, NEW_FUTURE, NEW_IN_FORCE, PARSE_FAILED, REPEALED, UNCHANGED,
                         AdapterResult, Evidence, Redaction, classify, parse_date, text_sha256)
-from ..fetchers import Fetcher
+from ..fetchers import Fetcher, shown_title
 
 ADAPTER = "eurlex"
 PARSER_ID = "eurlex/all-v1"
@@ -216,7 +216,7 @@ def check_page(act: dict, fetcher: Fetcher, today: _dt.date) -> AdapterResult:
     if r.error:
         return fail(FETCH_FAILED, r.error)
     if r.blocked:
-        return fail(BLOCKED_403, f"{r.blocked_reason}; page title {r.title!r}; "
+        return fail(BLOCKED_403, f"{r.blocked_reason}; page title {shown_title(r)}; "
                                  "anti-bot check not bypassed (by design)")
     if r.status == 202 and len(r.text or "") < MIN_TEXT_CHARS:
         return fail(BLOCKED_403, f"AWS WAF challenge: HTTP 202 with {len(r.text or '')}-char body; "
@@ -231,7 +231,7 @@ def check_page(act: dict, fetcher: Fetcher, today: _dt.date) -> AdapterResult:
     if len(r.text or "") < MIN_TEXT_CHARS:
         return fail(PARSE_FAILED, f"page text too short ({len(r.text or '')} chars): empty or truncated")
     if not identifies_act(celex, r.title, r.html):
-        return fail(PARSE_FAILED, f"page does not identify {celex} (title {r.title!r})")
+        return fail(PARSE_FAILED, f"page does not identify {celex} (title {shown_title(r)})")
 
     p = parse_eurlex(r.html, celex, today)
     fold_preeffect_consolidation(p, act, celex)
