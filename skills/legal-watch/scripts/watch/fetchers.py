@@ -92,17 +92,23 @@ FC_NO_CREDITS = "firecrawl: out of credits (plan limit reached)"
 # remembered per fetcher, i.e. per run.
 FC_FATAL = (FC_NOT_FOUND, FC_NOT_LOGGED_IN, FC_NO_CREDITS)
 FC_BAD_URL = "firecrawl: only http(s) page URLs can be read"
+# Prefix of the errors where the CLI never ran (no temp folder, the program cannot be executed): no request sent.
+FC_NOT_STARTED = "firecrawl: could not start ("
 
 
 def firecrawl_calls(attempts: list[dict]) -> int:
     """How many pages a run asked Firecrawl for, from the chain's attempts: the base of the digest's credit estimate.
 
-    Not counted: errors that bill nothing (no CLI, not logged in, out of credits, a refused URL); a skipped site
-    leaves no attempt at all. A timeout or a failed read still counts: the service may have billed it. This is an
-    estimate, never the bill: only the user's Firecrawl account shows what was charged.
+    Not counted: errors that bill nothing (no CLI, not logged in, out of credits, a refused URL, a CLI that could not
+    start); a skipped site leaves no attempt at all. A timeout or a failed read still counts: the service may have
+    billed it. This is an estimate, never the bill: only the user's Firecrawl account shows what was charged.
     """
     free = set(FC_FATAL) | {FC_BAD_URL}
-    return sum(1 for a in attempts or [] if a.get("via") == "firecrawl" and a.get("error") not in free)
+
+    def billable(a: dict) -> bool:
+        err = a.get("error")
+        return err not in free and not (err or "").startswith(FC_NOT_STARTED)
+    return sum(1 for a in attempts or [] if a.get("via") == "firecrawl" and billable(a))
 
 
 @dataclass
@@ -367,6 +373,36 @@ class FirecrawlFetcher(_Paced):
             self.fatal = error
         return FetchResult(url=url, status=None, fetched_at=fetched_at, via="firecrawl", error=error)
 
+    def _call(self, argv: list[str]):
+        """(completed process, None) or (None, fixed error). Only "could not start" errors mean no request was sent.
+
+        why the split: the credit estimate leaves out a call that never started (no temp folder, the CLI vanished
+        or cannot be executed), but keeps a timeout or a failure while running: the service may have billed those.
+        """
+        try:
+            # A fresh temp working folder: the CLI may save session files where it runs, and they must land neither
+            # in this repository nor in the user's legal profile.
+            tmp = tempfile.TemporaryDirectory(prefix="legal-watch-fc-")
+        except Exception as e:  # noqa: BLE001 — a full or read-only disk: "not verified", never a crash
+            return None, f"{FC_NOT_STARTED}{type(e).__name__})"
+        p = err = None
+        try:
+            with tmp as wd:
+                try:
+                    p = self.run(argv, capture_output=True, text=True, timeout=self.timeout, cwd=wd,
+                                 stdin=subprocess.DEVNULL)
+                except subprocess.TimeoutExpired:
+                    err = f"firecrawl: timed out after {self.timeout:g} s"
+                except OSError as e:   # subprocess raises OSError when the program cannot be executed at all
+                    err = f"{FC_NOT_STARTED}{type(e).__name__})"
+                except Exception as e:  # noqa: BLE001 — e.g. undecodable output: the call ran, so it may have billed
+                    err = f"firecrawl: failed while running ({type(e).__name__})"
+        except Exception:  # noqa: BLE001 — why: a temp folder that cannot be removed does not undo the call's answer
+            pass
+        if p is None and err is None:   # why: cleanup failed before an answer was kept (should not happen)
+            err = "firecrawl: failed while running (cleanup)"
+        return p, err
+
     def get(self, url: str) -> FetchResult:
         fetched_at = now_iso()
         fmt = firecrawl_format(url, self.formats)
@@ -383,16 +419,9 @@ class FirecrawlFetcher(_Paced):
         except FetchConfigError as e:   # why: one odd URL is "not verified" for that act, never a crashed run
             return self._error(url, fetched_at, str(e))
         self.pause()
-        try:
-            # A fresh temp working folder: the CLI may save session files where it runs, and they must land neither
-            # in this repository nor in the user's legal profile.
-            with tempfile.TemporaryDirectory(prefix="legal-watch-fc-") as wd:
-                p = self.run(argv, capture_output=True, text=True, timeout=self.timeout, cwd=wd,
-                             stdin=subprocess.DEVNULL)
-        except subprocess.TimeoutExpired:
-            return self._error(url, fetched_at, f"firecrawl: timed out after {self.timeout:g} s")
-        except Exception as e:  # noqa: BLE001 — a missing node, a permission error: "not verified", never a crash
-            return self._error(url, fetched_at, f"firecrawl: could not start ({type(e).__name__})")
+        p, err = self._call(argv)
+        if err:
+            return self._error(url, fetched_at, err)
         stdout, stderr = p.stdout or "", p.stderr or ""
         if p.returncode != 0:
             low = stderr.lower()

@@ -183,5 +183,50 @@ class DuplicateReadingRows(Tmp):
         self.assertEqual(captured["notes"], [runner.NOTE_FIRECRAWL_NOT_ALLOWED])
 
 
+class OnlyStartedCallsCount(unittest.TestCase):
+    def attempt(self, res: F.FetchResult) -> list[dict]:
+        return [{"via": "firecrawl", "error": res.error}]
+
+    def test_launch_failures_count_zero(self):
+        for exc in (FileNotFoundError(2, "gone"), PermissionError(13, "denied"), OSError(8, "exec format")):
+            with self.subTest(exc=type(exc).__name__):
+                f, _ = fetcher(exc)
+                res = f.get(LEGIS)
+                self.assertEqual(res.error, f"firecrawl: could not start ({type(exc).__name__})")
+                self.assertEqual(F.firecrawl_calls(self.attempt(res)), 0)
+
+    def test_temp_folder_failure_counts_zero_and_runs_nothing(self):
+        f, run = fetcher(proc(payload("markdown", MD, statusCode=200)))
+        with mock.patch.object(F.tempfile, "TemporaryDirectory", side_effect=OSError(28, "no space")):
+            res = f.get(LEGIS)
+        self.assertEqual(run.calls, [])
+        self.assertEqual(res.error, "firecrawl: could not start (OSError)")
+        self.assertEqual(F.firecrawl_calls(self.attempt(res)), 0)
+
+    def test_timeout_and_a_failure_while_running_still_count(self):
+        for exc, err in ((subprocess.TimeoutExpired("firecrawl", 120), "firecrawl: timed out after 120 s"),
+                         (UnicodeDecodeError("utf-8", b"\xff", 0, 1, "bad"),
+                          "firecrawl: failed while running (UnicodeDecodeError)")):
+            with self.subTest(exc=type(exc).__name__):
+                f, _ = fetcher(exc)
+                res = f.get(LEGIS)
+                self.assertEqual(res.error, err)
+                self.assertEqual(F.firecrawl_calls(self.attempt(res)), 1)
+
+    def test_a_cleanup_failure_after_the_call_keeps_the_page(self):
+        f, run = fetcher(proc(payload("markdown", MD, statusCode=200)))
+        real = F.tempfile.TemporaryDirectory
+
+        class Sticky(real):
+            def __exit__(self, *exc):
+                super().__exit__(*exc)
+                raise OSError(16, "busy")
+        with mock.patch.object(F.tempfile, "TemporaryDirectory", Sticky):
+            res = f.get(LEGIS)
+        self.assertEqual(len(run.calls), 1)
+        self.assertIsNone(res.error)
+        self.assertEqual(F.firecrawl_calls(self.attempt(res)), 1)
+
+
 if __name__ == "__main__":
     unittest.main()

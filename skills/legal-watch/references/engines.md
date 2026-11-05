@@ -30,7 +30,7 @@ usually a few: only the editions published since the last run). Weekly: 4–5 ru
 ≈ 100 credits a month, inside the Free plan; EU and Romanian acts cost nothing. A hand check through Firecrawl costs
 one credit a page too. The digest of a run with `firecrawl` gives `Firecrawl calls this run: N (estimated credits:
 about N; actual billing only in your Firecrawl account)`: pages asked of Firecrawl, without the errors that bill
-nothing (not logged in, out of credits, CLI not found). When the plan limit is reached the error is `firecrawl: out
+nothing (not logged in, out of credits, CLI not found or `could not start`). When the plan limit is reached the error is `firecrawl: out
 of credits (plan limit reached)` and the act stays "not verified".
 
 **Connect or disconnect later:** `watch engines add firecrawl` / `watch engines remove firecrawl` change only that
