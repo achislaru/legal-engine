@@ -25,6 +25,8 @@ REPO = SKILL.parents[1]
 FAKE_BIN = "/opt/fake/bin/firecrawl"
 LEGIS = "https://www.legis.md/cautare/getResults?doc_id=1&lang=ro"
 EURLEX = "https://eur-lex.europa.eu/eli/dir/2011/83/oj"
+# The Gazette is the allowlisted HTML site (D1): the tests that need Firecrawl to run on HTML use it.
+GAZETTE = "https://monitorul.gov.md/ro/monitor/view/1"
 HTML = "<html><head><title>Act</title></head><body><p>Articolul 1</p></body></html>"
 MD = "# Lege\n\nArticolul 1. Text of the act.\n"
 MARKER = "SECRET-MARKER-123"
@@ -68,10 +70,13 @@ class Lists(unittest.TestCase):
     def test_format_by_host(self):
         for url in (LEGIS, "https://legis.md/x", "http://WWW.LEGIS.MD/y"):
             self.assertEqual(F.firecrawl_format(url), "markdown", url)
-        for url in (EURLEX, "https://monitorul.gov.md/ro", "https://legislatie.just.ro/Public/DetaliiDocument/1",
-                    "https://web.archive.org/web/2026/x"):
+        for url in (GAZETTE, "https://www.monitorul.gov.md/ro"):
             self.assertEqual(F.firecrawl_format(url), "rawHtml", url)
-        self.assertEqual(F.firecrawl_format(LEGIS, {}), "rawHtml")
+        # D1: an allowlist; any other site gets no format, so Firecrawl is not used there
+        for url in (EURLEX, "https://legislatie.just.ro/Public/DetaliiDocument/1", "https://web.archive.org/web/2026/x",
+                    "https://publications.europa.eu/resource/celex/32011L0083", "not a url", ""):
+            self.assertIsNone(F.firecrawl_format(url), url)
+        self.assertIsNone(F.firecrawl_format(LEGIS, {}))
         self.assertEqual(F.firecrawl_format(EURLEX, {"eur-lex.europa.eu": "markdown"}), "markdown")
 
     def test_argv_exact_and_safe(self):
@@ -90,13 +95,24 @@ class Parse(unittest.TestCase):
         self.assertEqual(F.parse_firecrawl_json(bare, "rawHtml"), (HTML, {"statusCode": 200, "url": EURLEX}))
         wrapped = json.dumps({"success": True, "data": {"markdown": MD, "metadata": {"title": "T"}}})
         self.assertEqual(F.parse_firecrawl_json(wrapped, "markdown"), (MD, {"title": "T"}))
-        # rawHtml ↔ html fall back to each other; markdown has no fallback
-        self.assertEqual(F.parse_firecrawl_json(payload("html", HTML), "rawHtml")[0], HTML)
-        self.assertEqual(F.parse_firecrawl_json(payload("rawHtml", HTML), "html")[0], HTML)
         self.assertEqual(F.parse_firecrawl_json(json.dumps({"rawHtml": HTML, "metadata": []}), "rawHtml")[1], {})
-        for bad in ("not json", "", "[1, 2]", payload("markdown", "  "), payload("html", HTML)):
-            with self.assertRaises(F.FirecrawlOutputError, msg=bad):
-                F.parse_firecrawl_json(bad, "markdown")
+        # D2/X6: no html <-> rawHtml fallback: trimmed html may lack the metadata the parsers need
+        cases = {
+            payload("html", HTML): "firecrawl: format rawHtml not returned",
+            "not json": "firecrawl: unreadable output",
+            "[1, 2]": "firecrawl: unreadable output",
+            "": "firecrawl: no page content",
+            payload("rawHtml", "  "): "firecrawl: no page content",
+            json.dumps({"success": False, "error": MARKER}): "firecrawl: the service reported a failure",
+        }
+        for bad, msg in cases.items():
+            with self.subTest(bad=bad), self.assertRaises(F.FirecrawlOutputError) as cm:
+                F.parse_firecrawl_json(bad, "rawHtml")
+            self.assertEqual(str(cm.exception), msg)
+            self.assertNotIn(MARKER, str(cm.exception))
+        with self.assertRaises(F.FirecrawlOutputError) as cm:
+            F.parse_firecrawl_json(payload("rawHtml", HTML), "html")
+        self.assertEqual(str(cm.exception), "firecrawl: format html not returned")
 
 
 class Get(unittest.TestCase):
@@ -119,7 +135,7 @@ class Get(unittest.TestCase):
         def which(name):
             raise AssertionError("which must not be called")
         f, run = fetcher(proc(payload("rawHtml", HTML, statusCode=200)), which=which, binary="/opt/x/firecrawl")
-        self.assertEqual(f.get(EURLEX).status, 200)
+        self.assertEqual(f.get(GAZETTE).status, 200)
         self.assertEqual(run.calls[0]["argv"][0], "/opt/x/firecrawl")
 
     def test_markdown_page_for_legis(self):
@@ -132,25 +148,37 @@ class Get(unittest.TestCase):
         self.assertEqual(res.notes, [])
 
     def test_html_page_status_and_final_url(self):
-        snap = "https://web.archive.org/web/20261101000000/https://example.org/act"
-        f, run = fetcher(proc(payload("rawHtml", HTML, statusCode=200, url=snap)))
-        res = f.get("https://web.archive.org/web/2026/https://example.org/act")
+        moved = "https://monitorul.gov.md/ro/monitor/view/2"
+        f, run = fetcher(proc(payload("rawHtml", HTML, statusCode=200, url=moved)))
+        res = f.get(GAZETTE)
         self.assertEqual(run.calls[0]["argv"][4], "rawHtml")
-        self.assertEqual((res.final_url, res.title, res.html, res.markdown), (snap, "Act", HTML, ""))
+        self.assertEqual((res.final_url, res.title, res.html, res.markdown), (moved, "Act", HTML, ""))
         self.assertIn("Articolul 1", res.text)
         # a missing or non-http metadata url keeps the requested one
         f, _ = fetcher(proc(payload("rawHtml", HTML, statusCode=200, url="about:blank")))
-        self.assertEqual(f.get(EURLEX).final_url, EURLEX)
+        self.assertEqual(f.get(GAZETTE).final_url, GAZETTE)
 
-    def test_missing_status_code_defaults_to_200_with_note(self):
-        for meta in ({}, {"statusCode": "200"}, {"statusCode": True}):
-            f, _ = fetcher(proc(json.dumps({"rawHtml": HTML, "metadata": meta})))
-            res = f.get(EURLEX)
-            self.assertEqual(res.status, 200)
-            self.assertIn("status not reported by Firecrawl", res.notes)
+    def test_missing_or_invalid_status_is_a_failed_fetch(self):
+        """D2/X1: a page without a real status is never a 200: not verified, the next engine may try."""
+        for meta in ({}, {"statusCode": None}, {"statusCode": True}, {"statusCode": False}, {"statusCode": "abc"},
+                     {"statusCode": 99}, {"statusCode": 600}, {"statusCode": "2000"}, {"statusCode": 200.0},
+                     {"statusCode": "²⁰⁰"}, []):
+            with self.subTest(meta=meta):
+                f, _ = fetcher(proc(json.dumps({"rawHtml": HTML, "metadata": meta})))
+                res = f.get(GAZETTE)
+                self.assertEqual((res.status, res.error), (None, "firecrawl: page status not reported"))
+                self.assertFalse(res.blocked)
+
+    def test_numeric_string_status_is_normalised(self):
+        f, _ = fetcher(proc(payload("rawHtml", HTML, statusCode="403")))
+        res = f.get(GAZETTE)
+        self.assertEqual((res.status, res.blocked), (403, True))
+        f, _ = fetcher(proc(payload("rawHtml", HTML, statusCode=" 200 ")))
+        res = f.get(GAZETTE)
+        self.assertEqual((res.status, res.error, res.notes), (200, None, []))
 
     def test_target_403_is_blocked(self):
-        for fmt, url, body in (("rawHtml", EURLEX, HTML), ("markdown", LEGIS, MD)):
+        for fmt, url, body in (("rawHtml", GAZETTE, HTML), ("markdown", LEGIS, MD)):
             f, _ = fetcher(proc(payload(fmt, body, statusCode=403)))
             res = f.get(url)
             self.assertTrue(res.blocked, fmt)
@@ -159,7 +187,7 @@ class Get(unittest.TestCase):
 
     def test_target_404_is_error_not_blocked(self):
         f, _ = fetcher(proc(payload("rawHtml", HTML, statusCode=404)))
-        res = f.get(EURLEX)
+        res = f.get(GAZETTE)
         self.assertFalse(res.blocked)
         self.assertEqual(res.error, "HTTP 404 (reported by Firecrawl)")
 
@@ -189,45 +217,50 @@ class Get(unittest.TestCase):
         }
         for stderr, msg in cases.items():
             f, _ = fetcher(proc(stdout=MARKER, stderr=stderr, rc=1))
-            res = f.get(EURLEX)
+            res = f.get(GAZETTE)
             self.assertEqual(res.error, msg, stderr)
             self.assertNotIn(MARKER, repr(res), stderr)
         other = f"Error: something odd {MARKER}"
         f, _ = fetcher(proc(stderr=other, rc=3))
-        res = f.get(EURLEX)
+        res = f.get(GAZETTE)
         self.assertEqual(res.error, f"firecrawl: exit 3, {len(other)} bytes on stderr")
         self.assertNotIn(MARKER, repr(res))
         self.assertEqual((res.via, res.status, res.blocked), ("firecrawl", None, False))
 
     def test_timeout_and_missing_binary(self):
         f, run = fetcher(proc(), which=lambda name: None)
-        self.assertEqual(f.get(EURLEX).error, "firecrawl: CLI not found on PATH (npm i -g firecrawl-cli, then "
+        self.assertEqual(f.get(GAZETTE).error, "firecrawl: CLI not found on PATH (npm i -g firecrawl-cli, then "
                                               "firecrawl login --browser)")
         self.assertEqual(run.calls, [])
         f, _ = fetcher(subprocess.TimeoutExpired(["firecrawl"], 120))
-        self.assertEqual(f.get(EURLEX).error, "firecrawl: timed out after 120 s")
+        self.assertEqual(f.get(GAZETTE).error, "firecrawl: timed out after 120 s")
         f, _ = fetcher(PermissionError(MARKER))
-        res = f.get(EURLEX)
+        res = f.get(GAZETTE)
         self.assertEqual(res.error, "firecrawl: could not start (PermissionError)")
         self.assertNotIn(MARKER, repr(res))
 
-    def test_non_json_output_falls_back_to_sniffing(self):
-        note = "firecrawl: output was not JSON; status not reported"
-        f, _ = fetcher(proc(HTML))
-        res = f.get(EURLEX)
-        self.assertEqual((res.html, res.title, res.status, res.via), (HTML, "Act", 200, "firecrawl"))
-        self.assertIn(note, res.notes)
-        f, _ = fetcher(proc(MD))
-        res = f.get(LEGIS)
-        self.assertEqual((res.html, res.markdown, res.status), ("", MD, 200))
-        self.assertIn(note, res.notes)
+    def test_non_json_output_is_unreadable_never_a_page(self):
+        """D2: no sniffing of non-JSON stdout: an error printed with exit 0 must not pass as a page."""
+        for out, url in ((HTML, GAZETTE), (MD, LEGIS), (f"Error: Not authenticated {MARKER}", LEGIS)):
+            with self.subTest(out=out[:20]):
+                f, _ = fetcher(proc(out))
+                res = f.get(url)
+                self.assertEqual((res.error, res.status, res.html, res.markdown),
+                                 ("firecrawl: unreadable output", None, "", ""))
+                self.assertNotIn(MARKER, repr(res))
         for empty in ("", "  \n"):
             f, _ = fetcher(proc(empty))
-            self.assertEqual(f.get(EURLEX).error, "firecrawl: no page content")
+            self.assertEqual(f.get(GAZETTE).error, "firecrawl: no page content")
         f, _ = fetcher(proc(payload("rawHtml", "")))       # JSON without content: same honest failure
-        self.assertEqual(f.get(EURLEX).error, "firecrawl: no page content")
+        self.assertEqual(f.get(GAZETTE).error, "firecrawl: no page content")
         f, _ = fetcher(proc("[1, 2]"))
-        self.assertEqual(f.get(EURLEX).error, "firecrawl: unreadable output")
+        self.assertEqual(f.get(GAZETTE).error, "firecrawl: unreadable output")
+        f, _ = fetcher(proc(json.dumps({"success": False, "error": MARKER})))
+        res = f.get(GAZETTE)
+        self.assertEqual(res.error, "firecrawl: the service reported a failure")
+        self.assertNotIn(MARKER, repr(res))
+        f, _ = fetcher(proc(payload("html", HTML, statusCode=200)))    # rawHtml asked, only trimmed html came
+        self.assertEqual(f.get(GAZETTE).error, "firecrawl: format rawHtml not returned")
 
 
 class Chain(unittest.TestCase):
