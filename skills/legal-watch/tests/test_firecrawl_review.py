@@ -54,6 +54,8 @@ class Allowlist(unittest.TestCase):
         self.assertEqual((run.calls, sleeps), ([], []))
         self.assertFalse(f.accepts(EURLEX))
         self.assertTrue(f.accepts(LEGIS) and f.accepts(GAZETTE))
+        self.assertIsNone(F.firecrawl_format("https://[legis.md/x"))   # malformed: not on the list, no crash
+        self.assertEqual(f.get("https://[legis.md/x").error, SKIP)
 
     def test_chain_skips_firecrawl_on_eurlex_so_cellar_stays_free(self):
         """EUR-Lex's empty 202 from urllib ends the chain; Firecrawl is never asked (Cellar reads EU acts)."""
