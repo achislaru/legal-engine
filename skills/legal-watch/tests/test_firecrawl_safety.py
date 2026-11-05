@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import contextlib
 import datetime as dt
+import hashlib
 import io
 import json
 import sys
@@ -247,8 +248,10 @@ class FetchNeedsConversationConsent(Tmp):
         allow(self.profile, "conversation: on; monitoring: off")
         fake, _ = fetcher(proc(payload("markdown", MD, statusCode=200)))
         with mock.patch.object(cli, "FirecrawlFetcher", lambda **k: fake):
-            code, _, err = self.call("fetch", "--url", LEGIS, "--out", str(self.dir / "a.md"))
+            code, out, err = self.call("fetch", "--url", LEGIS, "--out", str(self.dir / "a.md"))
         self.assertEqual(code, 0, err)
+        # the printed sha256 is the card's `text_sha256` of the saved file (check_version hashes its bytes)
+        self.assertEqual(json.loads(out)["sha256"], hashlib.sha256((self.dir / "a.md").read_bytes()).hexdigest())
 
 
 class WatchlistBase(Tmp):
