@@ -6,15 +6,19 @@ No real CLI and no network: `run` and `which` are fakes; the JSON is synthetic.
 from __future__ import annotations
 
 import json
+import plistlib
+import shlex
 import subprocess
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 from types import SimpleNamespace
+from unittest import mock
 
 SKILL = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(SKILL / "scripts"))
-from watch import library as lib  # noqa: E402
+from watch import library as lib, schedule  # noqa: E402
 from watch import fetchers as F  # noqa: E402
 
 REPO = SKILL.parents[1]
@@ -248,6 +252,49 @@ class Chain(unittest.TestCase):
         with self.assertRaises(F.FetchConfigError) as cm:
             F.build_chain(["curl"])
         self.assertIn("firecrawl", str(cm.exception))
+
+
+def fake_which(found: dict[str, str]):
+    return lambda name: found.get(name)
+
+
+SYS = "/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin"
+TOOLS = {"firecrawl": "/opt/fake/bin/firecrawl", "node": "/opt/node/bin/node"}
+
+
+class SchedulePath(unittest.TestCase):
+    def test_launch_path_includes_cli_and_node_dirs(self):
+        self.assertEqual(schedule.launch_path(fake_which(TOOLS)), f"/opt/fake/bin:/opt/node/bin:{SYS}")
+        self.assertEqual(schedule.launch_path(fake_which({})), SYS)
+        # same folder twice, or a system folder: kept once, in first-seen order
+        both = {"firecrawl": "/usr/local/bin/firecrawl", "node": "/usr/local/bin/node"}
+        self.assertEqual(schedule.launch_path(fake_which(both)), "/usr/local/bin:/opt/homebrew/bin:/usr/bin:/bin")
+        self.assertEqual(schedule.launch_path(fake_which({"node": "/opt/node/bin/node"})), f"/opt/node/bin:{SYS}")
+
+    def test_plist_has_path(self):
+        prof = Path("/tmp/profile-x")
+        data = plistlib.loads(schedule.plist(prof, which=fake_which(TOOLS)))
+        self.assertEqual(data["EnvironmentVariables"]["PATH"], f"/opt/fake/bin:/opt/node/bin:{SYS}")
+        self.assertEqual(data["Label"], schedule.LABEL)
+        self.assertEqual(schedule.plan(prof, "launchd", which=fake_which(TOOLS))["path"],
+                         f"/opt/fake/bin:/opt/node/bin:{SYS}")
+
+    def test_cron_line_has_path_and_keeps_prefix(self):
+        prof = Path("/tmp/profile-x")
+        line = schedule.plan(prof, "cron", which=fake_which(TOOLS))["line"]
+        self.assertTrue(line.startswith("0 9 * * 1 PATH="), line)
+        self.assertEqual(shlex.split(line)[5], f"PATH=/opt/fake/bin:/opt/node/bin:{SYS}")
+        self.assertIn("legal_watch.py", line)
+        spaced = {"firecrawl": "/opt/my tools/firecrawl"}
+        self.assertEqual(shlex.split(schedule.plan(prof, "cron", which=fake_which(spaced))["line"])[5],
+                         f"PATH=/opt/my tools:{SYS}")
+
+    def test_install_writes_the_path(self):
+        run = lambda cmd, **kw: mock.Mock(returncode=0, stderr="")  # noqa: E731
+        with tempfile.TemporaryDirectory() as tmp, mock.patch.object(schedule.sys, "platform", "darwin"):
+            out = schedule.install(Path(tmp) / "profile", run=run, home=Path(tmp), which=fake_which(TOOLS))
+            data = plistlib.loads(Path(out["installed"]).read_bytes())
+        self.assertEqual(data["EnvironmentVariables"]["PATH"], f"/opt/fake/bin:/opt/node/bin:{SYS}")
 
 
 if __name__ == "__main__":
