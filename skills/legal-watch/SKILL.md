@@ -28,7 +28,7 @@ document tools are `<skill-dir>/../legal-contracts/` (`<legal-contracts>`). Scri
 
 | Request | Route |
 |---|---|
-| which laws concern my business; add or remove a law | [setup.md](references/setup.md) §6–7: catalog, suggestion, `watch init` |
+| which laws concern my business; add or remove a law | [setup.md](references/setup.md) §7–8: catalog, suggestion, `watch init` |
 | download the laws / check for changes now | [monitoring.md](references/monitoring.md): `watch run`, then check by hand what stayed not verified |
 | what changed | the latest digest (`watch digest`), explained in plain words with what it means for the business |
 | re-check my contracts after a change | [contracts.md](references/contracts.md): pending flags → a re-review matter through `legal-contracts` |
@@ -42,9 +42,9 @@ document tools are `<skill-dir>/../legal-contracts/` (`<legal-contracts>`). Scri
 1. **Run** — `watch run` (all acts, or `--acts p1` / ids). Exit 0 OK, 1 changes, 2 incomplete or bad input,
    3 unexpected error.
 2. **Close the gaps** — every act listed "not verified" is checked by hand when the user wants it now:
-   open the official page with the host's web tools or the user's browser, fill a version card
-   (`<legal-research>/references/version-check.md`, `scope: "text"` is enough for monitoring), save the text read,
-   then `watch record --card <card> --root <folder of the card>`. Never write "no changes" for an act that was
+   open the official page through Firecrawl if connected, else the host's web tools, else the user's browser, fill a
+   version card (`<legal-research>/references/version-check.md`, `scope: "text"` is enough for monitoring), save the
+   text read, then `watch record --card <card> --root <folder of the card> [--via firecrawl]`. Never write "no changes" for an act that was
    not read today.
 3. **Explain** — from the digest: what changed, from when, whom it touches (the user's firms, niches and
    contracts), what to do now and what can wait. A future version is announced with its date, never as law in force.
@@ -61,8 +61,8 @@ document tools are `<skill-dir>/../legal-contracts/` (`<legal-contracts>`). Scri
 - **Future versions stay future** until their start date; repeals are named with the repealing act.
 - **Look for room, not only for danger.** A change can open a lawful option (a lighter regime, a new form of
   activity, a later deadline): say so, `norms.md` §15.
-- **No key, no silent install, no sending.** Paid engines run through the user's own command; the weekly job is
-  installed only after the user's yes; the engine never sends the digest anywhere, signs or files anything.
+- **No key, no silent install, no sending.** Paid engines (`firecrawl`, or the user's own `command`) run on the
+  user's own login; the engine never sees a key. The weekly job is installed only after the user's yes; the engine never sends the digest anywhere, signs or files anything.
 - **Catalog entries are leads.** Each carries its check date and `verified` / `reported`; a document id that no
   longer opens the act is a finding for the run, not a reason to guess another one.
 

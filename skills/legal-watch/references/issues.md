@@ -19,8 +19,9 @@ the agent read it; the person sees it on `laws/report.html`. Written by the scri
 
 ## What the next run does by itself
 
-After 3 days with failures of an engine on a site and no success in between, `watch run` tries that engine **last** there (it would
-only cost the 5–15 s pause per act) and notes it in the reading. Every 7 days it is tried first again, in case the
+After 3 days with failures of an engine on a site and no success in between, `watch run` tries that engine **last** there (a free
+engine would only cost the 5–15 s pause per act; a demoted `firecrawl` still spends a credit when it is reached) and
+notes it in the reading. Every 7 days it is tried first again, in case the
 site opened up. An engine that is the only one still runs. Nothing is skipped silently: an act not read stays
 "not verified".
 
@@ -31,8 +32,8 @@ what is left. A recipe never turns a failure into "no changes".
 
 | Kind | Recipe |
 |---|---|
-| `blocked` | the site refuses automatic access: host check ([monitoring.md](monitoring.md), "Host check") with the host's web tools, else the user's browser after their yes; then `watch record` |
-| `fetch_failed` | the site did not answer: run again (`watch run --acts <id>`); after 3 in a row, host check; a site down for days is said plainly |
+| `blocked` | the site refuses automatic access: host check ([monitoring.md](monitoring.md), "Host check") through Firecrawl if connected, else the host's web tools, else the user's browser after their yes; then `watch record` (`--via firecrawl` when Firecrawl read the page). If Firecrawl is not connected, suggest it (wizard step `reading`, or `legal-workflow-update`) |
+| `fetch_failed` | the site did not answer: run again (`watch run --acts <id>`); after 3 in a row, host check; a site down for days is said plainly. Error `firecrawl: not logged in`: tell the user to run `firecrawl login --browser` themselves; `firecrawl: out of credits`: the plan limit is reached, say so (the free route stays) |
 | `parse_failed` | the page was read but not understood: host check now; when it repeats on the same site, the page layout probably changed: save the page (in the profile, never in the engine) and offer the user to report it to the engine's authors — they decide, the engine sends nothing |
 | `uncalibrated` | the reader of this site is not calibrated yet: host check until it is (see "Readers calibrated today" in monitoring.md) |
 | `no_source` | the act has no official source: find its page on the official site (legis.md / legislatie.just.ro / EUR-Lex), confirm with the user that it is the act, then `watch source add <id> --doc-id <id>` (EU: `--celex`), and `watch run --acts <id>` |

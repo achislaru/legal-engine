@@ -1,6 +1,6 @@
 # Contracts in force: the clause index and re-review
 
-The user's contracts in force are copies in `<profile>/contracts/` (step 8 of the wizard, or later on request);
+The user's contracts in force are copies in `<profile>/contracts/` (step 9 of the wizard, or later on request);
 the originals are never touched. Each gets an index `contracts/index/<file-stem>.json`:
 
 ```json
@@ -23,7 +23,7 @@ the originals are never touched. Each gets an index `contracts/index/<file-stem>
    definitions). Keep it short: only clauses a change of law could break.
 3. Every act of an index must be in the watchlist, or its changes will never reach the clause:
    `watch index check` lists the ones that are not watched (being in the catalog is not enough); add them in the
-   watchlist (setup.md §7). The scanner reads Romanian (`Legea nr. 287/2009`) and Moldovan (`Legea nr. 133 din
+   watchlist (setup.md §8). The scanner reads Romanian (`Legea nr. 287/2009`) and Moldovan (`Legea nr. 133 din
    08.07.2011`) citations, codes (a Romanian code under its approving law), EU acts in their cited order, and table
    cells of a DOCX.
 
