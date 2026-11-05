@@ -1,6 +1,6 @@
 # Status
 
-Version: 1.1.0 (2026-11-05; merge to `main` and the tags only after the owner's «да»). Updated: 2026-11-05.
+Version: 1.1.0 (2026-11-05; on `main`, tagged, published). Updated: 2026-11-05.
 
 | Step | What | State |
 |---|---|---|
@@ -15,7 +15,7 @@ Version: 1.1.0 (2026-11-05; merge to `main` and the tags only after the owner's 
 | 9 | `legal-watch`: niche → law catalog, law library, monitoring, contract re-review | done (branch `phase-1/legal-watch` on top of step 8; merge only after «да») |
 | 10 | end-to-end check, cross-model review, v1.0.0 | done (branch `phase-1/release-1.0` on top of step 9; merge only after «да») |
 | 10a | monitoring error log + `laws/report.html`, law library described (`legal-watch/references/issues.md`, `library.md`), v1.1.0; Codex review in 4 rounds: 3/5 → 3/5 → 4/5 → 5/5 | done (branch `phase-1/watch-issues` on top of step 10; merge only after «да») |
-| 11 | public GitHub repository and first push (owner's «да» first) | next |
+| 11 | public GitHub repository and first push | done 2026-11-05: github.com/achislaru/legal-engine (public, MIT, `main` + tags v1.0.0, v1.1.0); fork github.com/Automall-Training/legal-engine |
 
 Release check (step 10, 2026-11-05): 566 tests, coverage 93 %; clean install twice → `READY`; live monitoring
 run; scenario runs by fresh agents (wizard for an invented online-courses firm, NDA and Word redline, legal
