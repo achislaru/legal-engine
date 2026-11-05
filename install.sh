@@ -4,6 +4,7 @@
 #   SKILLS_DIR=… ./install.sh        # another skills folder (e.g. a project's .claude/skills)
 #   NO_DEPS=1 ./install.sh           # links only: no Python environment
 #   WITH_PLAYWRIGHT=1 ./install.sh   # also the free browser engine for scheduled law monitoring
+# The optional Firecrawl CLI (paid) is never installed here: the user installs it and signs in themselves.
 set -euo pipefail
 ENGINE="$(cd "$(dirname "$0")" && pwd)"
 SKILLS_DIR="${SKILLS_DIR:-$HOME/.claude/skills}"
@@ -49,3 +50,5 @@ if python3 "$ENGINE/tools/doctor.py"; then
 elif [ -z "${NO_DEPS:-}" ]; then
   exit 1
 fi
+# why: only a hint; the engine never runs npm and never signs in for the user.
+echo "option Firecrawl (paid reading of official sites, you sign in yourself): npm i -g firecrawl-cli && firecrawl login --browser — or connect it at the wizard's first step"

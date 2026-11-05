@@ -4,7 +4,8 @@
     python3 tools/doctor.py     # report; exit 0 = all required parts present, 1 = something required is missing
 
 Required: every engine skill linked into the skills folder, python3 >= 3.10, the engine's Python
-environment (.venv with the document packages). Optional parts are reported with what they serve.
+environment (.venv with the document packages). Optional parts (local tools, Playwright Chromium, the
+Firecrawl CLI) are reported with what they serve; they never make the engine "not ready".
 The user's profile is reported, not required: the setup wizard creates it.
 """
 
@@ -12,6 +13,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -34,6 +36,15 @@ OPTIONAL_CMDS = {
     "uv": "./install.sh builds the Python environment with it",
 }
 PLAYWRIGHT_CACHES = (Path.home() / "Library/Caches/ms-playwright", Path.home() / ".cache/ms-playwright")
+ANSI = re.compile(r"\x1b\[[0-9;]*[A-Za-z]")
+FIRECRAWL_LINES = {
+    "logged-in": (True, "Firecrawl CLI",
+                  "logged in: reads official pages that refuse plain requests (paid service you connected)"),
+    "not-logged-in": (None, "Firecrawl CLI", "installed, not logged in: run firecrawl login --browser yourself"),
+    "unknown": (None, "Firecrawl CLI", "installed, login state unknown: run firecrawl --status yourself"),
+    "absent": (None, "Firecrawl CLI", "optional: reads official pages that refuse plain requests; "
+               "npm i -g firecrawl-cli, then firecrawl login --browser"),
+}
 
 
 def engine_skills(root: Path = ROOT) -> list[str]:
@@ -68,6 +79,32 @@ def playwright_ready(py: Path = VENV_PY, caches: tuple[Path, ...] = PLAYWRIGHT_C
     if not (chromium and py.is_file()):
         return False
     return subprocess.run([str(py), "-c", "import playwright"], capture_output=True).returncode == 0
+
+
+def firecrawl_cli(which=shutil.which, run=subprocess.run, timeout: float = 20) -> str:
+    """Login state of the optional Firecrawl CLI: "absent", "logged-in", "not-logged-in" or "unknown".
+
+    why `--status` only: it prints the login state and the credits left, never the key (the CLI's status.ts).
+    Still, its output is only matched here and then dropped: it is never printed, logged or returned, so nothing
+    the CLI says can leak into a report. `view-config`, `env` and `--api-key` are never used, and neither the
+    FIRECRAWL_API_KEY variable nor the CLI's credentials file is read: the engine never touches the key.
+    """
+    path = which("firecrawl")
+    if not path:
+        return "absent"
+    try:
+        done = run([path, "--status"], capture_output=True, text=True, timeout=timeout,
+                   stdin=subprocess.DEVNULL)
+        text = ANSI.sub("", f"{done.stdout or ''}\n{done.stderr or ''}").lower()
+    except (OSError, subprocess.SubprocessError, ValueError, TypeError, AttributeError):
+        # why: a hung, broken or odd CLI is reported as "unknown", never as a doctor crash.
+        return "unknown"
+    # why: "not authenticated" contains "authenticated", so it is checked first.
+    if "not authenticated" in text:
+        return "not-logged-in"
+    if "authenticated" in text:
+        return "logged-in"
+    return "unknown"
 
 
 def open_watch_issues(profile: Path) -> int:
@@ -113,6 +150,7 @@ def main() -> int:
     browser = playwright_ready()
     line(True if browser else None, "Playwright Chromium",
          "free engine for scheduled law monitoring; WITH_PLAYWRIGHT=1 ./install.sh")
+    line(*FIRECRAWL_LINES[firecrawl_cli()])   # optional: never counted as missing
     prof, source = profile_dir()
     ready = (prof / "context" / "integration-status.md").is_file()
     line(True if ready else None, f"profile {prof}", source if ready else f"{source}; the setup wizard creates it")

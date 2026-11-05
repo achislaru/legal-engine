@@ -2,11 +2,15 @@
 
 from __future__ import annotations
 
+import contextlib
+import io
 import json
+import subprocess
 import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 import doctor  # noqa: E402
@@ -103,6 +107,114 @@ class Vendor(unittest.TestCase):
         hosts -= {"schemas.openxmlformats.org"}   # an XML namespace, not a request
         self.assertLessEqual(hosts, set(self.v["network"]["hosts"]))
 
+
+
+class FakeRun:
+    """Stands in for subprocess.run: records argv and kwargs, answers with fixed text or raises."""
+
+    def __init__(self, stdout: str = "", stderr: str = "", exc: BaseException | None = None):
+        self.stdout, self.stderr, self.exc = stdout, stderr, exc
+        self.calls: list[tuple[list[str], dict]] = []
+
+    def __call__(self, argv, **kwargs):
+        self.calls.append((list(argv), kwargs))
+        if self.exc:
+            raise self.exc
+        return subprocess.CompletedProcess(argv, 0, self.stdout, self.stderr)
+
+
+FAKE_PATH = "/opt/fake/bin/firecrawl"
+
+
+def have(_name):
+    return FAKE_PATH
+
+
+class FirecrawlCli(unittest.TestCase):
+    def test_absent(self):
+        run = FakeRun()
+        self.assertEqual(doctor.firecrawl_cli(which=lambda _n: None, run=run), "absent")
+        self.assertEqual(run.calls, [])
+
+    def test_logged_in(self):
+        run = FakeRun("\x1b[32m●\x1b[0m Authenticated via stored credentials\nCredits: 990 / 1,000")
+        self.assertEqual(doctor.firecrawl_cli(which=have, run=run), "logged-in")
+
+    def test_not_logged_in(self):
+        for out, err in (("Not authenticated\n", ""), ("", "\x1b[31mNOT AUTHENTICATED\x1b[0m")):
+            with self.subTest(out=out, err=err):
+                state = doctor.firecrawl_cli(which=have, run=FakeRun(out, err))
+                self.assertEqual(state, "not-logged-in")
+                self.assertNotEqual(state, "logged-in")
+
+    def test_unknown_on_odd_output_timeout_and_error(self):
+        cases = (FakeRun("something else entirely"), FakeRun(""), FakeRun(None, None),
+                 FakeRun(exc=subprocess.TimeoutExpired(["firecrawl"], 20)),
+                 FakeRun(exc=OSError("cannot execute")),
+                 FakeRun(exc=subprocess.CalledProcessError(1, ["firecrawl"])))
+        for run in cases:
+            with self.subTest(run=run.exc or run.stdout):
+                self.assertEqual(doctor.firecrawl_cli(which=have, run=run), "unknown")
+
+    def test_runs_only_status_without_key_flags(self):
+        run = FakeRun("Authenticated")
+        doctor.firecrawl_cli(which=have, run=run, timeout=5)
+        self.assertEqual(len(run.calls), 1)
+        argv, kwargs = run.calls[0]
+        self.assertEqual(argv, [FAKE_PATH, "--status"])
+        for bad in ("--api-key", "view-config", "env", "login"):
+            self.assertNotIn(bad, argv)
+        self.assertNotEqual(kwargs.get("shell"), True)
+        self.assertIs(kwargs["stdin"], subprocess.DEVNULL)
+        self.assertEqual(kwargs["timeout"], 5)
+        self.assertTrue(kwargs["capture_output"])
+
+    def test_every_state_has_one_doctor_line(self):
+        self.assertEqual(set(doctor.FIRECRAWL_LINES), {"absent", "logged-in", "not-logged-in", "unknown"})
+        self.assertIs(doctor.FIRECRAWL_LINES["logged-in"][0], True)
+        for state in ("absent", "not-logged-in", "unknown"):
+            self.assertIsNone(doctor.FIRECRAWL_LINES[state][0])   # optional: never MISS
+
+    def _main(self, run: FakeRun, which=have) -> tuple[int, str]:
+        real = doctor.firecrawl_cli
+        out = io.StringIO()
+        with tempfile.TemporaryDirectory() as tmp, \
+                mock.patch.object(doctor, "firecrawl_cli", lambda: real(which=which, run=run)), \
+                mock.patch.object(doctor, "venv_ready", return_value=True), \
+                mock.patch.object(doctor, "playwright_ready", return_value=False), \
+                mock.patch.object(doctor, "engine_skills", return_value=[]), \
+                mock.patch.object(doctor, "profile_dir", return_value=(Path(tmp), "test")), \
+                contextlib.redirect_stdout(out):
+            code = doctor.main()
+        return code, out.getvalue()
+
+    def test_main_never_prints_cli_output(self):
+        for text in ("Authenticated SECRET-MARKER-123", "Not authenticated SECRET-MARKER-123",
+                     "SECRET-MARKER-123"):
+            with self.subTest(text=text):
+                code, printed = self._main(FakeRun(text, "SECRET-MARKER-123"))
+                self.assertNotIn("SECRET-MARKER-123", printed)
+                self.assertEqual(sum("Firecrawl CLI" in ln for ln in printed.splitlines()), 1)
+                self.assertEqual(code, 0)   # never counted as missing
+
+    def test_main_lines_match_the_contract(self):
+        expected = {
+            "Authenticated": "OK   Firecrawl CLI — logged in: reads official pages that refuse plain requests "
+                             "(paid service you connected)",
+            "Not authenticated": "--   Firecrawl CLI — installed, not logged in: run firecrawl login --browser yourself",
+            "???": "--   Firecrawl CLI — installed, login state unknown: run firecrawl --status yourself",
+        }
+        for text, want in expected.items():
+            with self.subTest(text=text):
+                self.assertIn(want, self._main(FakeRun(text))[1].splitlines())
+        _, printed = self._main(FakeRun(), which=lambda _n: None)
+        self.assertIn("--   Firecrawl CLI — optional: reads official pages that refuse plain requests; "
+                      "npm i -g firecrawl-cli, then firecrawl login --browser", printed.splitlines())
+
+    def test_install_runs_no_npm(self):
+        install = (Path(__file__).resolve().parents[2] / "install.sh").read_text(encoding="utf-8")
+        self.assertNotRegex(install, r"(?m)^\s*npm\s")
+        self.assertIn("firecrawl", install)
 
 if __name__ == "__main__":
     unittest.main()
